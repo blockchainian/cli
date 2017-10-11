@@ -1,20 +1,22 @@
 #!/usr/bin/env python
 
-# Requires: lxml, bs4
+# Requires: lxml, bs4, PyExecJS
 
-import cmd, getpass, json, re, sys, requests
+import cmd, getpass, json, os, re, sys, requests
 from lxml import html
 from bs4 import BeautifulSoup
+import execjs
 
 def args( arg ):
     return arg.split()
 
 class Problem( object ):
-    def __init__( self, pid, slug, level, desc=None ):
+    def __init__( self, pid, slug, level, desc='', code='' ):
         self.pid = pid
         self.slug = slug
         self.level = level
         self.desc = desc
+        self.code = code
 
     def __str__( self ):
         return '%3d %s' % ( self.pid, self.slug )
@@ -75,16 +77,27 @@ class OJMixin( object ):
 
         return problems
 
-    def get_description( self, slug ):
+    def get_problem( self, slug ):
         url = self.url + '/problems/%s/description/' % slug
         cls = { 'class' : 'question-description' }
+        js = r'var pageData =\s*(.*?);'
 
         resp = self.session.get( url )
+        desc = code = ''
+
         soup = BeautifulSoup( resp.text, 'lxml' )
         for e in soup.find_all( 'div', attrs=cls ):
-            return e.text
+            desc = e.text
+            break
 
-        return None
+        for s in re.findall( js, resp.text, re.DOTALL ):
+            v = execjs.eval( s )
+            for cs in v.get( 'codeDefinition' ):
+                if cs.get( 'text' ) == 'Python':
+                    code = cs.get( 'defaultCode' )
+            break
+
+        return ( desc, code )
 
 class CodeShell( cmd.Cmd, OJMixin ):
     tags, tag, problems, pid = {}, None, {}, None
@@ -98,7 +111,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
         if self.tag:
             wd += self.tag
             if self.pid:
-                wd += '/%s-%d' % ( self.problems[ self.pid ].slug, self.pid )
+                wd += '/%d-%s' % ( self.pid, self.problems[ self.pid ].slug )
         return wd
 
     def precmd( self, line ):
@@ -107,9 +120,6 @@ class CodeShell( cmd.Cmd, OJMixin ):
     def do_login( self, unused ):
         self.login()
         self.tags = self.tag = None
-
-    def do_clear( self, unused ):
-        print "\033c"
 
     def do_ls( self, _filter ):
         if not self.tags:
@@ -128,7 +138,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
         else:
             p = self.problems[ self.pid ]
             if not p.desc:
-                p.desc = self.get_description( p.slug )
+                p.desc, p.code = self.get_problem( p.slug )
             print p.desc
 
     def complete_cd( self, text, line, start, end ):
@@ -159,26 +169,14 @@ class CodeShell( cmd.Cmd, OJMixin ):
             if pid in self.problems:
                 self.pid = pid
 
-    def do_solve( self, newPid ):
-        todo = """solve <pid>
-        if pid:
-            confirm if to solve another problem
-            if no:
-                return
-            else:
-                pid = newPid
+    def do_cat( self, unused ):
+        path = '/tmp/%d.py' % self.pid
 
-        ( desc, boilerplate ) = get problem <pid> URL
-
-        pad = '/tmp/%d.py' % pid
-        with open( pad ) as f:
-            f.write( boilerplate )
-        pads[ pid ] = pad
-
-        print desc
-        print pad"""
-
-        print todo
+        if not os.path.isfile( path ):
+            with open( path, 'w' ) as f:
+                code = self.problems[ self.pid ].code
+                f.write( code )
+        print path
 
     def do_check( self, unused ):
         todo = """check
@@ -210,14 +208,8 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
         print todo
 
-    def do_hint( self, unused ):
-        todo = """hint
-        if pid:
-            # we can also save desc and load locally
-            desc = get problem URL
-            print desc"""
-
-        print todo
+    def do_clear( self, unused ):
+        print "\033c"
 
     def do_eof( self, arg ):
         return True
