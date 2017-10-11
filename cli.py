@@ -24,6 +24,8 @@ class CodeShell( cmd.Cmd, OJMixin ):
     def do_list( self, _filter ):
         todo = """list < filter >
         if tag == <root>:
+            if not taglist:
+                taglist = get taglist URL
             print taglist
         else:
             problems = tagMap.get( tag )
@@ -51,12 +53,12 @@ class CodeShell( cmd.Cmd, OJMixin ):
             else:
                 pid = newPid
 
-        ( desc, boilerplate ) = get problem URL
+        ( desc, boilerplate ) = get problem <pid> URL
 
         pad = '/tmp/%d.py' % pid
         with open( pad ) as f:
             f.write( boilerplate )
-        pads[ pid ] = solution file path
+        pads[ pid ] = pad
 
         print desc
         print pad"""
@@ -75,7 +77,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
     def do_submit( self, unused ):
         todo = """submit
         if pid:
-            error = post pads[ pid ] to check URL
+            error = post pads[ pid ] to submit URL
             if error:
                 print test case
                 print error"""
@@ -87,7 +89,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
         if pid:
             sl = cheatsheet.get( pid )
             if not sl:
-                sl = get solutions of pid URL
+                sl = get cheatsheet <pid> URL
                 cheatsheet[ pid ] = sl
             print the best solutions in sl"""
 
@@ -96,6 +98,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
     def do_reload( self, unused ):
         todo = """reload
         if pid:
+            # we can also save desc and load locally
             desc = get problem URL
             print desc
             print pads[ pid ]"""
