@@ -39,7 +39,6 @@ class OJMixin( object ):
         data = {
             'login': username,
             'password': password,
-            'remember': True,
             'csrfmiddlewaretoken': csrf
         }
 
@@ -76,8 +75,19 @@ class OJMixin( object ):
         return problems
 
 class CodeShell( cmd.Cmd, OJMixin ):
-    prompt = '> '
-    tags, tag, problems = {}, None, {}
+    tags, tag, problems, pid = {}, None, {}, None
+
+    @property
+    def prompt( self ):
+        return self.cwd() + '> '
+
+    def cwd( self ):
+        wd = '/'
+        if self.tag:
+            wd += self.tag
+            if self.pid:
+                wd += '/%s-%d' % ( self.problems[ self.pid ].slug, self.pid )
+        return wd
 
     def precmd( self, line ):
         return line.lower()
@@ -85,6 +95,9 @@ class CodeShell( cmd.Cmd, OJMixin ):
     def do_login( self, unused ):
         self.login()
         self.tags = self.tag = None
+
+    def do_clear( self, unused ):
+        print "\033c"
 
     def do_ls( self, _filter ):
         if not self.tags:
@@ -96,32 +109,40 @@ class CodeShell( cmd.Cmd, OJMixin ):
         if not self.tag:
             for t in sorted( self.tags.keys() ):
                 print '\t', '%3d' % len( self.tags[ t ] ), t
-        else:
+        elif not self.pid:
             ql = self.tags.get( self.tag )
             for i in sorted( ql ):
                 print '\t', self.problems[ i ]
+        else:
+            print 'xxx'
 
     def complete_cd( self, text, line, start, end ):
-        suffixes = []
-        for t in sorted( self.tags.keys () ):
-            if t.startswith( text ):
-                i = len( text )
+        if self.tag:
+            keys = [ str( i ) for i in self.tags[ self.tag ] ]
+        else:
+            keys = self.tags.keys()
+
+        prefix, suffixes = line.split()[ -1 ], []
+
+        for t in sorted( keys ):
+            if t.startswith( prefix ):
+                i = len( prefix )
                 suffixes.append( t[ i: ] )
 
-        if len( suffixes ) == 1:
-            s = suffixes[ 0 ]
-            return [ text + s ]
-        elif len( suffixes ) > 1:
-            # XXX: binary-*-*
-            print ''
-            for s in suffixes:
-                print '\t', text + s
-            sys.stdout.write( self.prompt + line )
-        return [ text ]
+        return [ text + s for s in suffixes ]
 
     def do_cd( self, tag ):
-        if tag in self.tags.keys():
+        if tag == '..':
+            if self.pid:
+                self.pid = None
+            elif self.tag:
+                self.tag = None
+        elif tag in self.tags:
             self.tag = tag
+        elif tag.isdigit():
+            pid = int( tag )
+            if pid in self.problems:
+                self.pid = pid
 
     def do_solve( self, newPid ):
         todo = """solve <pid>
@@ -189,5 +210,4 @@ class CodeShell( cmd.Cmd, OJMixin ):
 if __name__ == '__main__':
     shell = CodeShell()
     shell.login()
-
     shell.cmdloop()
