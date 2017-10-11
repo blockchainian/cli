@@ -14,6 +14,6 @@
 
 ### cheat
 
-### reload
+### hint
 
 ### Control+D to exit

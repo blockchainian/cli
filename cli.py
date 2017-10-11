@@ -95,13 +95,12 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
         print todo
 
-    def do_reload( self, unused ):
-        todo = """reload
+    def do_hint( self, unused ):
+        todo = """hint
         if pid:
             # we can also save desc and load locally
             desc = get problem URL
-            print desc
-            print pads[ pid ]"""
+            print desc"""
 
         print todo
 
