@@ -1,16 +1,12 @@
-# cli
+# CLI
 
-LeetCode CLI
-
-## List of Commands
-
-###login <username>
+### login < username >
 
 ### list
 
-### goto <tag>
+### goto < tag >
 
-### solve <problem #>
+### solve < problem # >
 
 ### check
 
@@ -19,3 +15,5 @@ LeetCode CLI
 ### cheat
 
 ### reload
+
+### Control+D to exit
