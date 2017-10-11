@@ -5,33 +5,17 @@ LeetCode CLI
 ## List of Commands
 
 ###login <username>
-    ask for password
 
-### list <tags>
+### list
 
 ### goto <tag>
 
-### list <problems>
-    --solved | --open
-    --difficulty
-    --frequency
-    --company
+### solve <problem #>
 
-### open <problem #>
-    get description
-    get boilerplate
-    save temp file to local dir
+### check
 
-### check <problem #>
-    check syntax
-    run sanity check
+### submit
 
-### submit <problem #>
-    test solution
-    display errors
+### cheat
 
-### help <problem #>
-    display solution from local file
-    display best solutions from Web
-
-### logout
+### reload
