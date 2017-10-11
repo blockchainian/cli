@@ -188,6 +188,6 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
 if __name__ == '__main__':
     shell = CodeShell()
-#   shell.login()
+    shell.login()
 
     shell.cmdloop()
