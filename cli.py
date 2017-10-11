@@ -1,22 +1,23 @@
 #!/usr/bin/env python
 
-# Requires: lxml
+# Requires: lxml, bs4
 
-import cmd, getpass, json, sys, requests
-# from leetcode import *
+import cmd, getpass, json, re, sys, requests
 from lxml import html
+from bs4 import BeautifulSoup
 
 def args( arg ):
     return arg.split()
 
 class Problem( object ):
-    def __init__( self, pid, slug, level ):
+    def __init__( self, pid, slug, level, desc=None ):
         self.pid = pid
         self.slug = slug
         self.level = level
+        self.desc = desc
 
     def __str__( self ):
-        return '%3d %s' % ( self.pid, self.slug)
+        return '%3d %s' % ( self.pid, self.slug )
 
 class OJMixin( object ):
     url = 'https://leetcode.com'
@@ -74,6 +75,17 @@ class OJMixin( object ):
 
         return problems
 
+    def get_description( self, slug ):
+        url = self.url + '/problems/%s/description/' % slug
+        cls = { 'class' : 'question-description' }
+
+        resp = self.session.get( url )
+        soup = BeautifulSoup( resp.text, 'lxml' )
+        for e in soup.find_all( 'div', attrs=cls ):
+            return e.text
+
+        return None
+
 class CodeShell( cmd.Cmd, OJMixin ):
     tags, tag, problems, pid = {}, None, {}, None
 
@@ -114,7 +126,10 @@ class CodeShell( cmd.Cmd, OJMixin ):
             for i in sorted( ql ):
                 print '\t', self.problems[ i ]
         else:
-            print 'xxx'
+            p = self.problems[ self.pid ]
+            if not p.desc:
+                p.desc = self.get_description( p.slug )
+            print p.desc
 
     def complete_cd( self, text, line, start, end ):
         if self.tag:
