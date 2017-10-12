@@ -95,7 +95,7 @@ class Result( object ):
             s += '\n' if len( self.output ) > 1 else ' '
             s += '\n'.join( self.output[ : limit ] ) + '\n'
 
-        if self.runtime != 'N/A':
+        if not self.runtime in [ 'N/A', None ]:
             s += 'Time: ' + self.runtime
         return s
 
