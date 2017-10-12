@@ -31,6 +31,10 @@ class Problem( object ):
     def solved( self ):
         return self.status == 'ac'
 
+    @solved.setter
+    def solved( self, x ):
+        self.status = 'ac' if x else 'notac'
+
     @property
     def failed( self ):
         return self.status == 'notac'
@@ -51,11 +55,12 @@ class Solution( object ):
         return s
 
 class Result( object ):
-    limit = 25
     def __init__( self, sid, result ):
         self.sid = sid
-        self.success = result.get( 'run_success' )
+        self.success = False
         self.output = result.get( 'code_output', '' )
+        if type( self.output ) in [ str, unicode ]:
+            self.output = self.output.splitlines()
         self.runtime = result.get( 'status_runtime' )
 
         self.result = result.get( 'code_answer', [] )
@@ -65,35 +70,33 @@ class Result( object ):
             if total:
                 self.result.append( "%d/%d tests passed" % ( passed, total ) )
 
-        self.errors = {}
-        for e in [ 'runtime_error' ]:
-            m = result.get( e )
-            if m:
-                self.errors[ e ] = m
-
-        status = result.get( 'status_code' )
-        if status == 13:
-            self.errors[ 'output_limit_exceeded' ] = '\n'
+        self.errors = []
+        status, m = result.get( 'status_code' ), result.get( 'runtime_error' )
+        if status == 10:
+            self.success = True
+        elif status == 13:
+            self.errors.append( 'Output Limit Exceeded' )
         elif status == 14:
-            self.errors[ 'time_limit_exceeded' ] = '\n'
+            self.errors.append( 'Time limit Exceeded' )
+        if m:
+            self.errors.append( m )
 
     def __str__( self ):
-        s = ''
-        for e, m in self.errors.iteritems():
-            s += e.replace( '_', ' ' ).title() + ':' + m
+        limit = 25
+        s = '\n'.join( self.errors )
 
         if self.result:
-            s += 'Result: ' + ' '.join( self.result ) + '\n'
+            s += 'Result:'
+            s += '\n' if len( self.result ) > 1 else ' '
+            s += '\n'.join( self.result ) + '\n'
 
         if self.output:
-            s += 'Output: '
-            if type( self.output ) == list:
-                s += '\n'.join( self.output[ : self.limit ] )
-            else:
-                s += '\n'.join( self.output.splitlines()[ : self.limit ] )
-            s += '\n'
+            s += 'Output:'
+            s += '\n' if len( self.output ) > 1 else ' '
+            s += '\n'.join( self.output[ : limit ] ) + '\n'
 
-        s += 'Time: ' + self.runtime
+        if self.runtime != 'N/A':
+            s += 'Time: ' + self.runtime
         return s
 
 class OJMixin( object ):
@@ -122,7 +125,7 @@ class OJMixin( object ):
 
         resp = self.session.post( url, data, headers=headers )
         if self.session.cookies.get( 'LEETCODE_SESSION' ):
-            print 'Welcome to %s!\n' % self.url
+            print 'Welcome %s!\n' % username
             self.loggedIn = True
 
     def get_tags( self ):
@@ -277,6 +280,7 @@ class OJMixin( object ):
 class CodeShell( cmd.Cmd, OJMixin ):
     tags, problems, cheatsheet = {}, {}, {}
     tag = pid = sid = None
+    test = '/tmp/test.dat'
 
     @property
     def prompt( self ):
@@ -373,16 +377,10 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 self.pid = pid
 
     def do_cat( self, unused ):
-        p = self.problems.get( self.pid )
-        if p and os.path.isfile( self.pad ):
-            with open( self.pad, 'r' ) as f:
-                for s in f.readlines():
-                    sys.stdout.write( s )
-                print ''
+        if os.path.isfile( self.pad ):
+            print self.pad
 
     def do_pull( self, unused ):
-        test = '/tmp/test.dat'
-
         p = self.problems.get( self.pid )
         if p:
             if not p.desc:
@@ -390,9 +388,8 @@ class CodeShell( cmd.Cmd, OJMixin ):
             code = self.get_latest_solution( p )
             with open( self.pad, 'w' ) as f:
                 f.write( code )
-
-        with open( test, 'w' ) as f:
-            f.write( p.test )
+            with open( self.test, 'w' ) as f:
+                f.write( p.test )
 
         print self.pad
 
@@ -403,6 +400,8 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 code = f.read()
                 result = self.test_solution( p, code )
                 if result:
+                    with open( self.test, 'r' ) as f:
+                        print 'Input:', f.read()
                     print result
 
     def do_push( self, unused ):
@@ -413,6 +412,8 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 result = self.test_solution( p, code, full=True )
                 if result:
                     self.sid = result.sid
+                    if result.success:
+                        p.solved = True
                     print result
 
     def do_cheat( self, limit ):
@@ -440,7 +441,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
         print '%d solved %d failed %d left' % ( solved, failed, fresh )
 
     def do_clear( self, unused ):
-        print "\033c"
+        os.system( 'clear' )
 
     def do_eof( self, arg ):
         return True
