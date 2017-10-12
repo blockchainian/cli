@@ -328,13 +328,13 @@ class CodeShell( cmd.Cmd, OJMixin ):
         else:
             return None
 
-    def do_login( self, unused ):
+    def do_login( self, unused=None ):
         self.login()
         self.tags = self.get_tags()
         self.problems = self.get_problems()
         self.tag = self.pid = self.sid = None
         if self.loggedIn:
-            self.do_top( None )
+            self.do_top()
 
     def complete_chmod( self, text, line, start, end ):
         keys = self.langs
@@ -471,7 +471,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
             for i in xrange( limit ):
                 print cs[ i ]
 
-    def do_top( self, unused ):
+    def do_top( self, unused=None ):
         solved = failed = fresh = 0
 
         for p in self.problems.itervalues():
@@ -492,5 +492,5 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
 if __name__ == '__main__':
     shell = CodeShell()
-    shell.do_login( None )
+    shell.do_login()
     shell.cmdloop()
