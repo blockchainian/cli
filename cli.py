@@ -51,6 +51,7 @@ class Solution( object ):
         return s
 
 class Result( object ):
+    limit = 25
     def __init__( self, sid, result ):
         self.sid = sid
         self.success = result.get( 'run_success' )
@@ -69,16 +70,17 @@ class Result( object ):
             m = result.get( e )
             if m:
                 self.errors[ e ] = m
-        if result.get( 'status_code' ) == 14:
-            self.errors[ 'time_limit_exceeded' ] = ''
+
+        status = result.get( 'status_code' )
+        if status == 13:
+            self.errors[ 'output_limit_exceeded' ] = '\n'
+        elif status == 14:
+            self.errors[ 'time_limit_exceeded' ] = '\n'
 
     def __str__( self ):
         s = ''
         for e, m in self.errors.iteritems():
             s += e.replace( '_', ' ' ).title() + ':' + m
-        else:
-            if s:
-                s += '\n'
 
         if self.result:
             s += 'Result: ' + ' '.join( self.result ) + '\n'
@@ -86,9 +88,9 @@ class Result( object ):
         if self.output:
             s += 'Output: '
             if type( self.output ) == list:
-                s += '\n'.join( self.output )
+                s += '\n'.join( self.output[ : self.limit ] )
             else:
-                s += self.output
+                s += '\n'.join( self.output.splitlines()[ : self.limit ] )
             s += '\n'
 
         s += 'Time: ' + self.runtime
