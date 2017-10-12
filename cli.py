@@ -7,20 +7,37 @@ from lxml import html
 from bs4 import BeautifulSoup
 import execjs
 
-def args( arg ):
-    return arg.split()
-
 class Problem( object ):
-    def __init__( self, pid, slug, level, desc='', code='', test='' ):
+    def __init__( self, pid, slug, level, status=None, desc='', code='', test='' ):
         self.pid = pid
         self.slug = slug
         self.level = level
         self.desc = desc
         self.code = code
         self.test = test
+        self.status = status
 
     def __str__( self ):
-        return '%3d %s' % ( self.pid, self.slug )
+        if self.solved:
+            s = ' '
+        elif self.failed:
+            s = 'x'
+        else:
+            s = '*'
+        s += '%3d %s' % ( self.pid, self.slug )
+        return s
+
+    @property
+    def solved( self ):
+        return self.status == 'ac'
+
+    @property
+    def failed( self ):
+        return self.status == 'notac'
+
+    @property
+    def fresh( self ):
+        return not self.status
 
 class Solution( object ):
     def __init__( self, pid, sid, code ):
@@ -29,7 +46,7 @@ class Solution( object ):
         self.code = code
 
     def __str__( self ):
-        s = '%d-%d:\n' % ( self.pid, self.sid )
+        s = '[%d ms]\n' % self.sid
         s += self.code
         return s
 
@@ -44,7 +61,8 @@ class Result( object ):
         if not self.result:
             total = result.get( 'total_testcases' )
             passed = result.get( 'compare_result', '' ).count( '1' )
-            self.result = [ "%d/%d tests passed" % ( passed, total ) ]
+            if total:
+                self.result.append( "%d/%d tests passed" % ( passed, total ) )
 
         self.errors = {}
         for e in [ 'runtime_error' ]:
@@ -65,11 +83,13 @@ class Result( object ):
         if self.result:
             s += 'Result: ' + ' '.join( self.result ) + '\n'
 
-        s += 'Output: '
-        if type( self.output ) == list:
-            s += '\n'.join( self.output ) + '\n'
-        else:
-            s += self.output + '\n'
+        if self.output:
+            s += 'Output: '
+            if type( self.output ) == list:
+                s += '\n'.join( self.output )
+            else:
+                s += self.output
+            s += '\n'
 
         s += 'Time: ' + self.runtime
         return s
@@ -100,7 +120,7 @@ class OJMixin( object ):
 
         resp = self.session.post( url, data, headers=headers )
         if self.session.cookies.get( 'LEETCODE_SESSION' ):
-            print 'Welcome!'
+            print 'Welcome to %s!\n' % self.url
             self.loggedIn = True
 
     def get_tags( self ):
@@ -126,7 +146,8 @@ class OJMixin( object ):
             i = e.get( 'stat' ).get( 'question_id' )
             s = e.get( 'stat' ).get( 'question__title_slug' )
             l = e.get( 'difficulty' ).get( 'level' )
-            problems[ i ] = Problem( pid=i, slug=s, level=l )
+            t = e.get( 'status' )
+            problems[ i ] = Problem( pid=i, slug=s, level=l, status=t )
 
         return problems
 
@@ -157,7 +178,6 @@ class OJMixin( object ):
     def get_latest_solution( self, p ):
         url = self.url + '/submissions/latest/'
         referer = self.url + '/problems/%s/description/' % p.slug
-
         headers = {
                 'referer' : referer,
                 'content-type' : 'application/json',
@@ -170,7 +190,11 @@ class OJMixin( object ):
         }
 
         resp = self.session.post( url, json=data, headers=headers )
-        code = json.loads( resp.text ).get( 'code' )
+
+        try:
+            code = json.loads( resp.text ).get( 'code' )
+        except ValueError:
+            code = p.code
         return code
 
     # @login_required
@@ -240,8 +264,11 @@ class OJMixin( object ):
         }
 
         resp = self.session.post( url, json=data, headers=headers )
-        sid = json.loads( resp.text ).get( sidKey )
-        result = self.get_result( sid )
+        try:
+            sid = json.loads( resp.text ).get( sidKey )
+            result = self.get_result( sid )
+        except ValueError:
+            result = None
 
         return result
 
@@ -255,6 +282,9 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
     def precmd( self, line ):
         return line.lower()
+
+    def emptyline( self ):
+        pass
 
     def cwd( self ):
         wd = '/'
@@ -270,22 +300,42 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
     def do_login( self, unused ):
         self.login()
-        self.tags = self.tag = None
+        self.tags = self.get_tags()
+        self.problems = self.get_problems()
+        self.tag = self.pid = self.sid = None
+        if self.loggedIn:
+            self.do_top( None )
 
     def do_ls( self, _filter ):
         if not self.tags:
             self.tags = self.get_tags()
-
         if not self.problems:
             self.problems = self.get_problems()
 
         if not self.tag:
             for t in sorted( self.tags.keys() ):
-                print '\t', '%3d' % len( self.tags[ t ] ), t
+                print '   ', '%3d' % len( self.tags[ t ] ), t
         elif not self.pid:
-            ql = self.tags.get( self.tag )
-            for i in sorted( ql ):
-                print '\t', self.problems[ i ]
+            pl, pd = self.tags.get( self.tag ), {}
+            for i in sorted( pl ):
+                p = self.problems[ i ]
+
+                if p.level not in pd:
+                    pd[ p.level ] = []
+                pd[ p.level ].append( p )
+
+            solved = failed = fresh = 0
+            for l in sorted( pd.keys(), reverse=True ):
+                for p in pd[ l ]:
+                    print '   ', p
+                    if p.solved:
+                        solved += 1
+                    elif p.failed:
+                        failed += 1
+                    else:
+                        fresh += 1
+                print ''
+            print '%d solved %d failed %d left' % ( solved, failed, fresh )
         else:
             p = self.problems[ self.pid ]
             if not p.desc:
@@ -321,13 +371,23 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 self.pid = pid
 
     def do_cat( self, unused ):
+        p = self.problems.get( self.pid )
+        if p and os.path.isfile( self.pad ):
+            with open( self.pad, 'r' ) as f:
+                for s in f.readlines():
+                    sys.stdout.write( s )
+                print ''
+
+    def do_pull( self, unused ):
         test = '/tmp/test.dat'
 
-        p = self.problems[ self.pid ]
-
-        if not os.path.isfile( self.pad ):
+        p = self.problems.get( self.pid )
+        if p:
+            if not p.desc:
+                p.desc, p.code, p.test = self.get_problem( p.slug )
+            code = self.get_latest_solution( p )
             with open( self.pad, 'w' ) as f:
-                f.write( p.code )
+                f.write( code )
 
         with open( test, 'w' ) as f:
             f.write( p.test )
@@ -340,14 +400,8 @@ class CodeShell( cmd.Cmd, OJMixin ):
             with open( self.pad, 'r' ) as f:
                 code = f.read()
                 result = self.test_solution( p, code )
-                print result
-
-    def do_pull( self, unused ):
-        p = self.problems.get( self.pid )
-        if p:
-            code = self.get_latest_solution( p )
-            with open( self.pad, 'w' ) as f:
-                f.write( code )
+                if result:
+                    print result
 
     def do_push( self, unused ):
         p = self.problems.get( self.pid )
@@ -355,8 +409,9 @@ class CodeShell( cmd.Cmd, OJMixin ):
             with open( self.pad, 'r' ) as f:
                 code = f.read()
                 result = self.test_solution( p, code, full=True )
-                self.sid = result.sid
-                print result
+                if result:
+                    self.sid = result.sid
+                    print result
 
     def do_cheat( self, limit ):
         if self.pid and self.sid:
@@ -369,6 +424,19 @@ class CodeShell( cmd.Cmd, OJMixin ):
             for i in xrange( limit ):
                 print cs[ i ]
 
+    def do_top( self, unused ):
+        solved = failed = fresh = 0
+
+        for p in self.problems.itervalues():
+            if p.solved:
+                solved += 1
+            elif p.failed:
+                failed += 1
+            else:
+                fresh += 1
+
+        print '%d solved %d failed %d left' % ( solved, failed, fresh )
+
     def do_clear( self, unused ):
         print "\033c"
 
@@ -377,5 +445,5 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
 if __name__ == '__main__':
     shell = CodeShell()
-    shell.login()
+    shell.do_login( None )
     shell.cmdloop()
