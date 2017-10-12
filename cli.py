@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# Requires: lxml, bs4, PyExecJS
-
 import cmd, getpass, json, os, re, requests, sys, time
 from lxml import html
 from bs4 import BeautifulSoup

@@ -1,23 +1,32 @@
 # CLI
 
-### login
+## Requirements
 
-### top
+```sudo pip install lxml bs4 PyExecJS```
 
-### ls
+## Commands
 
-### cd < tag | problem | .. >
+```
+login
 
-### cat
+chmod < language >
 
-### pull
+top
 
-### check
+ls
 
-### push
+cd < tag | problem | .. >
 
-### cheat < number of examples >
+cat
 
-### clear
+pull
 
-### Control+D to exit
+check
+
+push
+
+cheat < number of examples >
+
+clear
+```
+Control+D to exit
