@@ -71,15 +71,17 @@ class Result( object ):
                 self.result.append( "%d/%d tests passed" % ( passed, total ) )
 
         self.errors = []
-        status, m = result.get( 'status_code' ), result.get( 'runtime_error' )
-        if status == 10:
-            self.success = True
-        elif status == 13:
+        for e in [ 'compile_error', 'runtime_error' ]:
+            m = result.get( e )
+            if m:
+                self.errors.append( m )
+        status = result.get( 'status_code' )
+        if status == 13:
             self.errors.append( 'Output Limit Exceeded' )
         elif status == 14:
             self.errors.append( 'Time limit Exceeded' )
-        if m:
-            self.errors.append( m )
+        elif status == 10:
+            self.success = True
 
     def __str__( self ):
         limit = 25
@@ -101,8 +103,25 @@ class Result( object ):
 
 class OJMixin( object ):
     url = 'https://leetcode.com'
-    session = requests.session()
-    loggedIn = False
+    langs = [ 'c', 'cpp', 'golang', 'java', 'javascript', 'python', 'scala' ]
+    lang = 'python'
+
+    @property
+    def suffix( self ):
+        suffixes = { 'golang': 'go', 'javascript': 'js', 'python': 'py' }
+        return suffixes.get( self.lang, self.lang )
+
+    @property
+    def language( self ):
+        languages = {
+            'cpp': 'C++',
+            'csharp' : 'C#',
+            'golang' : 'Go',
+            'javascript' : 'JavaScript'
+        }
+        return languages.get( self.lang, self.lang.title() )
+
+    session, loggedIn = requests.session(), False
 
     def login( self ):
         url = self.url + '/accounts/login/'
@@ -172,7 +191,7 @@ class OJMixin( object ):
         for s in re.findall( js, resp.text, re.DOTALL ):
             v = execjs.eval( s )
             for cs in v.get( 'codeDefinition' ):
-                if cs.get( 'text' ) == 'Python':
+                if cs.get( 'text' ) == self.language:
                     code = cs.get( 'defaultCode' )
             test = v.get( 'sampleTestCase' )
             break
@@ -191,7 +210,7 @@ class OJMixin( object ):
         }
         data = {
             'qid': p.pid,
-            'lang': 'python',
+            'lang': self.lang,
         }
 
         resp = self.session.post( url, json=data, headers=headers )
@@ -204,7 +223,8 @@ class OJMixin( object ):
 
     # @login_required
     def get_solution( self, pid, token ):
-        url = self.url + '/submissions/api/detail/%d/python/%d/' % ( pid, token )
+        url = self.url + '/submissions/api/detail/%d/%s/%d/' % \
+                ( pid, self.lang, token )
 
         resp = self.session.get( url )
         data = json.loads( resp.text )
@@ -222,12 +242,15 @@ class OJMixin( object ):
 
         for s in re.findall( js, resp.text, re.DOTALL ):
             v = execjs.eval( s )
-            df = json.loads( v.get( 'distribution_formatted' ) )
-            if df.get( 'lang' ) == 'python':
-                for e in df.get( 'distribution' )[ : limit ]:
-                    token = int( e[ 0 ] )
-                    solutions.append( self.get_solution( pid, token ) )
-                break
+            try:
+                df = json.loads( v.get( 'distribution_formatted' ) )
+                if df.get( 'lang' ) == self.lang:
+                    for e in df.get( 'distribution' )[ : limit ]:
+                        token = int( e[ 0 ] )
+                        solutions.append( self.get_solution( pid, token ) )
+                    break
+            except ValueError:
+                pass
 
         return solutions
 
@@ -261,7 +284,7 @@ class OJMixin( object ):
         }
         data = {
             'judge_type': 'large',
-            'lang' : 'python',
+            'lang' : self.lang,
             'test_mode' : False,
             'question_id' : str( p.pid ),
             'typed_code' : code,
@@ -302,7 +325,10 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
     @property
     def pad( self ):
-        return '/tmp/%d.py' % self.pid if self.pid else None
+        if self.pid:
+            return '/tmp/%d.%s' % ( self.pid, self.suffix )
+        else:
+            return None
 
     def do_login( self, unused ):
         self.login()
@@ -311,6 +337,27 @@ class CodeShell( cmd.Cmd, OJMixin ):
         self.tag = self.pid = self.sid = None
         if self.loggedIn:
             self.do_top( None )
+
+    def complete_chmod( self, text, line, start, end ):
+        keys = self.langs
+        prefix, suffixes = ' '.join( line.split()[ 1: ] ), []
+
+        for t in sorted( keys ):
+            if t.startswith( prefix ):
+                i = len( prefix )
+                suffixes.append( t[ i: ] )
+
+        return [ text + s for s in suffixes ]
+
+    def do_chmod( self, lang ):
+        if lang in self.langs and lang != self.lang:
+            self.lang = lang
+            for p in self.problems.itervalues():
+                p.code = ''
+            self.cheatsheet.clear()
+            self.sid = None
+        else:
+            print self.lang
 
     def do_ls( self, _filter ):
         if not self.tags:
@@ -344,7 +391,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
             print '%d solved %d failed %d left' % ( solved, failed, fresh )
         else:
             p = self.problems[ self.pid ]
-            if not p.desc:
+            if not ( p.desc and p.code ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
             print p.desc
 
@@ -353,8 +400,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
             keys = [ str( i ) for i in self.tags[ self.tag ] ]
         else:
             keys = self.tags.keys()
-
-        prefix, suffixes = line.split()[ -1 ], []
+        prefix, suffixes = ' '.join( line.split()[ 1: ] ), []
 
         for t in sorted( keys ):
             if t.startswith( prefix ):
@@ -383,7 +429,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
     def do_pull( self, unused ):
         p = self.problems.get( self.pid )
         if p:
-            if not p.desc:
+            if not ( p.desc and p.code ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
             code = self.get_latest_solution( p )
             with open( self.pad, 'w' ) as f:
@@ -395,7 +441,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
     def do_check( self, unused ):
         p = self.problems.get( self.pid )
-        if p:
+        if p and os.path.isfile( self.pad ):
             with open( self.pad, 'r' ) as f:
                 code = f.read()
                 result = self.test_solution( p, code )
@@ -406,7 +452,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
     def do_push( self, unused ):
         p = self.problems.get( self.pid )
-        if p:
+        if p and os.path.isfile( self.pad ):
             with open( self.pad, 'r' ) as f:
                 code = f.read()
                 result = self.test_solution( p, code, full=True )
