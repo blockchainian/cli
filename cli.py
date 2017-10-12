@@ -2,7 +2,7 @@
 
 # Requires: lxml, bs4, PyExecJS
 
-import cmd, getpass, json, os, re, sys, requests
+import cmd, getpass, json, os, re, requests, sys, time
 from lxml import html
 from bs4 import BeautifulSoup
 import execjs
@@ -11,15 +11,30 @@ def args( arg ):
     return arg.split()
 
 class Problem( object ):
-    def __init__( self, pid, slug, level, desc='', code='' ):
+    def __init__( self, pid, slug, level, desc='', code='', test='' ):
         self.pid = pid
         self.slug = slug
         self.level = level
         self.desc = desc
         self.code = code
+        self.test = test
 
     def __str__( self ):
         return '%3d %s' % ( self.pid, self.slug )
+
+class Result( object ):
+    def __init__( self, data ):
+        self.success = data.get( 'run_success' )
+        self.result = data.get( 'code_answer', [] )
+        self.output = data.get( 'code_output', [] )
+        self.runtime = data.get( 'status_runtime', "not available" )
+
+    def __str__( self ):
+        s  = 'Succeeded\n' if self.success else 'Failed'
+        s += '\nResult:\n' + '\n'.join( self.result )
+        s += '\n\nOutput:\n' + '\n'.join( self.output ) if self.output else ''
+        s += '\n\nTime: ' + self.runtime
+        return s
 
 class OJMixin( object ):
     url = 'https://leetcode.com'
@@ -45,8 +60,8 @@ class OJMixin( object ):
             'csrfmiddlewaretoken': csrf
         }
 
-        r = self.session.post( url, data, headers=headers )
-        if r.status_code == requests.codes.ok:
+        resp = self.session.post( url, data, headers=headers )
+        if self.session.cookies.get( 'LEETCODE_SESSION' ):
             print 'Welcome!'
             self.loggedIn = True
 
@@ -83,7 +98,7 @@ class OJMixin( object ):
         js = r'var pageData =\s*(.*?);'
 
         resp = self.session.get( url )
-        desc = code = ''
+        desc = code = test = ''
 
         soup = BeautifulSoup( resp.text, 'lxml' )
         for e in soup.find_all( 'div', attrs=cls ):
@@ -95,9 +110,47 @@ class OJMixin( object ):
             for cs in v.get( 'codeDefinition' ):
                 if cs.get( 'text' ) == 'Python':
                     code = cs.get( 'defaultCode' )
+            test = v.get( 'sampleTestCase' )
             break
 
-        return ( desc, code )
+        return ( desc, code, test )
+
+    def check_interp( self, expected ):
+        url = self.url + '/submissions/detail/%s/check/' % expected
+
+        while True:
+            time.sleep( 1 )
+            resp = self.session.get( url )
+            data = json.loads( resp.text )
+            if data.get( 'state' ) == 'SUCCESS':
+                break
+            sys.stdout.write( '.' )
+
+        return Result( data )
+
+    def check_solution( self, p, code ):
+        url = self.url + '/problems/%s/interpret_solution/' % p.slug
+        referer = self.url + '/problems/%s/description/' % p.slug
+        headers = {
+                'referer' : referer,
+                'content-type' : 'application/json',
+                'x-csrftoken' : self.session.cookies[ 'csrftoken' ],
+                'x-requested-with' : 'XMLHttpRequest',
+        }
+        data = {
+            'judge_type': 'large',
+            'lang' : 'python',
+            'test_mode' : False,
+            'question_id' : str( p.pid ),
+            'typed_code' : code,
+            'data_input': p.test,
+        }
+
+        resp = self.session.post( url, json=data, headers=headers )
+        expected = json.loads( resp.text ).get( 'interpret_expected_id' )
+        result = self.check_interp( expected )
+
+        return result
 
 class CodeShell( cmd.Cmd, OJMixin ):
     tags, tag, problems, pid = {}, None, {}, None
@@ -138,7 +191,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
         else:
             p = self.problems[ self.pid ]
             if not p.desc:
-                p.desc, p.code = self.get_problem( p.slug )
+                p.desc, p.code, p.test = self.get_problem( p.slug )
             print p.desc
 
     def complete_cd( self, text, line, start, end ):
@@ -170,22 +223,27 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 self.pid = pid
 
     def do_cat( self, unused ):
-        path = '/tmp/%d.py' % self.pid
+        test = '/tmp/test.dat'
+        self.pad = '/tmp/%d.py' % self.pid
 
-        if not os.path.isfile( path ):
-            with open( path, 'w' ) as f:
-                code = self.problems[ self.pid ].code
-                f.write( code )
-        print path
+        p = self.problems[ self.pid ]
+
+        if not os.path.isfile( self.pad ):
+            with open( self.pad, 'w' ) as f:
+                f.write( p.code )
+
+        with open( test, 'w' ) as f:
+            f.write( p.test )
+
+        print self.pad
 
     def do_check( self, unused ):
-        todo = """check
-        if pid:
-            error = post pads[ pid ] to check URL
-            if error:
-                print error"""
-
-        print todo
+        p = self.problems.get( self.pid )
+        if p:
+            with open( self.pad, 'r' ) as f:
+                code = f.read()
+                result = self.check_solution( p, code )
+                print result
 
     def do_submit( self, unused ):
         todo = """submit
