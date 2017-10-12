@@ -22,18 +22,56 @@ class Problem( object ):
     def __str__( self ):
         return '%3d %s' % ( self.pid, self.slug )
 
-class Result( object ):
-    def __init__( self, data ):
-        self.success = data.get( 'run_success' )
-        self.result = data.get( 'code_answer', [] )
-        self.output = data.get( 'code_output', [] )
-        self.runtime = data.get( 'status_runtime', "not available" )
+class Solution( object ):
+    def __init__( self, pid, sid, code ):
+        self.pid = pid
+        self.sid = sid
+        self.code = code
 
     def __str__( self ):
-        s  = 'Succeeded\n' if self.success else 'Failed'
-        s += '\nResult:\n' + '\n'.join( self.result )
-        s += '\n\nOutput:\n' + '\n'.join( self.output ) if self.output else ''
-        s += '\n\nTime: ' + self.runtime
+        s = '%d-%d:\n' % ( self.pid, self.sid )
+        s += self.code
+        return s
+
+class Result( object ):
+    def __init__( self, sid, result ):
+        self.sid = sid
+        self.success = result.get( 'run_success' )
+        self.output = result.get( 'code_output', '' )
+        self.runtime = result.get( 'status_runtime' )
+
+        self.result = result.get( 'code_answer', [] )
+        if not self.result:
+            total = result.get( 'total_testcases' )
+            passed = result.get( 'compare_result', '' ).count( '1' )
+            self.result = [ "%d/%d tests passed" % ( passed, total ) ]
+
+        self.errors = {}
+        for e in [ 'runtime_error' ]:
+            m = result.get( e )
+            if m:
+                self.errors[ e ] = m
+        if result.get( 'status_code' ) == 14:
+            self.errors[ 'time_limit_exceeded' ] = ''
+
+    def __str__( self ):
+        s = ''
+        for e, m in self.errors.iteritems():
+            s += e.replace( '_', ' ' ).title() + ':' + m
+        else:
+            if s:
+                s += '\n'
+
+        if self.result:
+            s += 'Result: ' + ' '.join( self.result ) + '\n'
+
+        s += 'Output: '
+        if type( self.output ) == list:
+            s += '\n'.join( self.output ) + '\n'
+        else:
+            s += self.output + '\n'
+
+        s += 'Time: ' + self.runtime
         return s
 
 class OJMixin( object ):
@@ -115,8 +153,58 @@ class OJMixin( object ):
 
         return ( desc, code, test )
 
-    def check_interp( self, expected ):
-        url = self.url + '/submissions/detail/%s/check/' % expected
+    # @login_required
+    def get_latest_solution( self, p ):
+        url = self.url + '/submissions/latest/'
+        referer = self.url + '/problems/%s/description/' % p.slug
+
+        headers = {
+                'referer' : referer,
+                'content-type' : 'application/json',
+                'x-csrftoken' : self.session.cookies[ 'csrftoken' ],
+                'x-requested-with' : 'XMLHttpRequest',
+        }
+        data = {
+            'qid': p.pid,
+            'lang': 'python',
+        }
+
+        resp = self.session.post( url, json=data, headers=headers )
+        code = json.loads( resp.text ).get( 'code' )
+        return code
+
+    # @login_required
+    def get_solution( self, pid, token ):
+        url = self.url + '/submissions/api/detail/%d/python/%d/' % ( pid, token )
+
+        resp = self.session.get( url )
+        data = json.loads( resp.text )
+        code = data.get( 'code' )
+
+        return Solution( pid, token, code )
+
+    # @login_required
+    def get_solutions( self, pid, sid, limit=5 ):
+        url = self.url + '/submissions/detail/%s/' % sid
+        js = r'var pageData =\s*(.*?);'
+
+        resp = self.session.get( url )
+        solutions = []
+
+        for s in re.findall( js, resp.text, re.DOTALL ):
+            v = execjs.eval( s )
+            df = json.loads( v.get( 'distribution_formatted' ) )
+            if df.get( 'lang' ) == 'python':
+                for e in df.get( 'distribution' )[ : limit ]:
+                    token = int( e[ 0 ] )
+                    solutions.append( self.get_solution( pid, token ) )
+                break
+
+        return solutions
+
+    # @login_required
+    def get_result( self, sid ):
+        url = self.url + '/submissions/detail/%s/check/' % sid
 
         while True:
             time.sleep( 1 )
@@ -124,12 +212,17 @@ class OJMixin( object ):
             data = json.loads( resp.text )
             if data.get( 'state' ) == 'SUCCESS':
                 break
-            sys.stdout.write( '.' )
 
-        return Result( data )
+        return Result( sid, data )
 
-    def check_solution( self, p, code ):
-        url = self.url + '/problems/%s/interpret_solution/' % p.slug
+    # @login_required
+    def test_solution( self, p, code, full=False ):
+        if full:
+            epUrl, sidKey = 'submit/', 'submission_id'
+        else:
+            epUrl, sidKey = 'interpret_solution/', 'interpret_id'
+
+        url = self.url + '/problems/%s/%s/' % ( p.slug, epUrl )
         referer = self.url + '/problems/%s/description/' % p.slug
         headers = {
                 'referer' : referer,
@@ -147,17 +240,21 @@ class OJMixin( object ):
         }
 
         resp = self.session.post( url, json=data, headers=headers )
-        expected = json.loads( resp.text ).get( 'interpret_expected_id' )
-        result = self.check_interp( expected )
+        sid = json.loads( resp.text ).get( sidKey )
+        result = self.get_result( sid )
 
         return result
 
 class CodeShell( cmd.Cmd, OJMixin ):
-    tags, tag, problems, pid = {}, None, {}, None
+    tags, problems, cheatsheet = {}, {}, {}
+    tag = pid = sid = None
 
     @property
     def prompt( self ):
         return self.cwd() + '> '
+
+    def precmd( self, line ):
+        return line.lower()
 
     def cwd( self ):
         wd = '/'
@@ -167,8 +264,9 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 wd += '/%d-%s' % ( self.pid, self.problems[ self.pid ].slug )
         return wd
 
-    def precmd( self, line ):
-        return line.lower()
+    @property
+    def pad( self ):
+        return '/tmp/%d.py' % self.pid if self.pid else None
 
     def do_login( self, unused ):
         self.login()
@@ -224,7 +322,6 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
     def do_cat( self, unused ):
         test = '/tmp/test.dat'
-        self.pad = '/tmp/%d.py' % self.pid
 
         p = self.problems[ self.pid ]
 
@@ -242,29 +339,35 @@ class CodeShell( cmd.Cmd, OJMixin ):
         if p:
             with open( self.pad, 'r' ) as f:
                 code = f.read()
-                result = self.check_solution( p, code )
+                result = self.test_solution( p, code )
                 print result
 
-    def do_submit( self, unused ):
-        todo = """submit
-        if pid:
-            error = post pads[ pid ] to submit URL
-            if error:
-                print test case
-                print error"""
+    def do_pull( self, unused ):
+        p = self.problems.get( self.pid )
+        if p:
+            code = self.get_latest_solution( p )
+            with open( self.pad, 'w' ) as f:
+                f.write( code )
 
-        print todo
+    def do_push( self, unused ):
+        p = self.problems.get( self.pid )
+        if p:
+            with open( self.pad, 'r' ) as f:
+                code = f.read()
+                result = self.test_solution( p, code, full=True )
+                self.sid = result.sid
+                print result
 
-    def do_cheat( self, unused ):
-        todo = """cheat
-        if pid:
-            sl = cheatsheet.get( pid )
-            if not sl:
-                sl = get cheatsheet <pid> URL
-                cheatsheet[ pid ] = sl
-            print the best solutions in sl"""
+    def do_cheat( self, limit ):
+        if self.pid and self.sid:
+            cs = self.cheatsheet.get( self.pid )
+            if not cs:
+                cs = self.get_solutions( self.pid, self.sid )
+                self.cheatsheet[ self.pid ] = cs
 
-        print todo
+            limit = min( len( cs ), max( int( limit ), 1 ) if limit else 1 )
+            for i in xrange( limit ):
+                print cs[ i ]
 
     def do_clear( self, unused ):
         print "\033c"
