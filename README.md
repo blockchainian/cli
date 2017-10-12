@@ -1,19 +1,21 @@
 # CLI
 
-### login < username >
+### login
 
-### list
+### ls
 
-### goto < tag >
+### cd < tag | problem | .. >
 
-### solve < problem # >
+### cat
+
+### pull
 
 ### check
 
-### submit
+### push
 
-### cheat
+### cheat < number of examples >
 
-### hint
+### clear
 
 ### Control+D to exit
