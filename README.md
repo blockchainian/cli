@@ -1,5 +1,9 @@
 # CLI
 
+Start screen, vim and cli.py. Practice as many questions as you can:-)
+
+Note: this tool is not affiliated with leetcode.com.
+
 ## Requirements
 
 ```sudo pip install lxml bs4 PyExecJS```
