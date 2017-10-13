@@ -2,11 +2,15 @@
 
 Start screen, vim and cli.py. Practice as many questions as you can:-)
 
-Note: this tool is not affiliated with leetcode.com.
+This tool is not affiliated with leetcode.com.
 
 ## Requirements
 
 ```sudo pip install requests lxml bs4 PyExecJS ascii_graph```
+
+On Mac OS:
+
+```easy_install requests[security]```
 
 ## Commands
 
