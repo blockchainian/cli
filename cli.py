@@ -39,7 +39,7 @@ class Problem( object ):
         return self.status == 'notac'
 
     @property
-    def fresh( self ):
+    def todo( self ):
         return not self.status
 
 class Solution( object ):
@@ -413,7 +413,12 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
         if not self.tag:
             for t in sorted( self.tags.keys() ):
-                print '   ', '%3d' % len( self.tags[ t ] ), t
+                pl = self.tags[ t ]
+                todo = 0
+                for pid in pl:
+                    if not self.problems[ pid ].solved:
+                        todo += 1
+                print '   ', '%3d' % todo, t
             self.do_top()
 
         elif not self.pid:
@@ -425,7 +430,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
                     pd[ p.level ] = []
                 pd[ p.level ].append( p )
 
-            solved = failed = fresh = 0
+            solved = failed = todo = 0
             for l in sorted( pd.keys(), reverse=True ):
                 for p in pd[ l ]:
                     print '   ', p
@@ -434,9 +439,9 @@ class CodeShell( cmd.Cmd, OJMixin ):
                     elif p.failed:
                         failed += 1
                     else:
-                        fresh += 1
+                        todo += 1
                 print ''
-            print '%d solved %d failed %d left' % ( solved, failed, fresh )
+            print '%d solved %d failed %d todo' % ( solved, failed, todo )
         else:
             p = self.problems[ self.pid ]
             if not ( p.desc and p.code ):
@@ -557,7 +562,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 print cs[ i ]
 
     def do_top( self, unused=None ):
-        solved = failed = fresh = 0
+        solved = failed = todo = 0
 
         for p in self.problems.itervalues():
             if p.solved:
@@ -565,9 +570,9 @@ class CodeShell( cmd.Cmd, OJMixin ):
             elif p.failed:
                 failed += 1
             else:
-                fresh += 1
+                todo += 1
 
-        print '%d solved %d failed %d left' % ( solved, failed, fresh )
+        print '%d solved %d failed %d todo' % ( solved, failed, todo )
 
     def do_clear( self, unused ):
         os.system( 'clear' )
