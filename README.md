@@ -6,7 +6,7 @@ Note: this tool is not affiliated with leetcode.com.
 
 ## Requirements
 
-```sudo pip install lxml bs4 PyExecJS```
+```sudo pip install requests lxml bs4 PyExecJS ascii_graph```
 
 ## Commands
 
@@ -15,9 +15,9 @@ login
 
 chmod < language >
 
-top
-
 ls
+
+/ < keyword >
 
 cd < tag | problem | .. >
 
@@ -32,5 +32,7 @@ push
 cheat < number of examples >
 
 clear
+
+top
 ```
 Control+D to exit

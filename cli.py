@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
-import cmd, getpass, json, os, re, requests, sys, time
+import cmd, getpass, json, os, re, sys, time
+import requests, execjs
 from lxml import html
 from bs4 import BeautifulSoup
-import execjs
 
 class Problem( object ):
-    def __init__( self, pid, slug, level, status=None, desc='', code='', test='' ):
+    def __init__( self, pid, slug, level, tags=[], status=None, desc='', code='', test='' ):
         self.pid = pid
         self.slug = slug
         self.level = level
+        self.tags = tags[ : ]
         self.desc = desc
         self.code = code
         self.test = test
@@ -54,12 +55,18 @@ class Solution( object ):
 
 class Result( object ):
     def __init__( self, sid, result ):
+#       import pprint
+#       pprint.pprint( result )
+
         self.sid = sid
         self.success = False
-        self.output = result.get( 'code_output', '' )
-        if type( self.output ) in [ str, unicode ]:
-            self.output = self.output.splitlines()
-        self.runtime = result.get( 'status_runtime' )
+
+        def split( s ):
+            s.splitlines() if type( s ) in [ str, unicode ] else s
+
+        self.input = result.get( 'last_testcase', '' )
+        self.output = split( result.get( 'std_output', result.get( 'code_output', '' ) ) )
+        self.expected = split( result.get( 'expected_output', '' ) )
 
         self.result = result.get( 'code_answer', [] )
         if not self.result:
@@ -69,7 +76,7 @@ class Result( object ):
                 self.result.append( "%d/%d tests passed" % ( passed, total ) )
 
         self.errors = []
-        for e in [ 'compile_error', 'runtime_error' ]:
+        for e in [ 'compile_error', 'runtime_error', 'error' ]:
             m = result.get( e )
             if m:
                 self.errors.append( m )
@@ -81,22 +88,34 @@ class Result( object ):
         elif status == 10:
             self.success = True
 
+        self.runtime = int( result.get( 'status_runtime', '0' ).replace( 'ms', '' ) )
+
     def __str__( self ):
         limit = 25
         s = '\n'.join( self.errors )
+        if s:
+            s += '\n'
+
+        if self.input:
+            s += 'Input: ' + self.input + '\n'
 
         if self.result:
             s += 'Result:'
             s += '\n' if len( self.result ) > 1 else ' '
             s += '\n'.join( self.result ) + '\n'
 
+        if self.expected:
+            s += 'Expected:'
+            s += '\n' if len( self.expected ) > 1 else ' '
+            s += '\n'.join( self.expected[ : limit ] ) + '\n'
+
         if self.output:
             s += 'Output:'
             s += '\n' if len( self.output ) > 1 else ' '
             s += '\n'.join( self.output[ : limit ] ) + '\n'
 
-        if not self.runtime in [ 'N/A', None ]:
-            s += 'Time: ' + self.runtime
+        if self.runtime:
+            s += 'Time: %d ms' % self.runtime
         return s
 
 class OJMixin( object ):
@@ -253,15 +272,37 @@ class OJMixin( object ):
         return solutions
 
     # @login_required
-    def get_result( self, sid ):
+    def get_solution_runtimes( self, sid ):
+        url = self.url + '/submissions/detail/%s/' % sid
+        js = r'var pageData =\s*(.*?);'
+
+        resp = self.session.get( url )
+        runtimes = []
+
+        for s in re.findall( js, resp.text, re.DOTALL ):
+            v = execjs.eval( s )
+            try:
+                df = json.loads( v.get( 'distribution_formatted' ) )
+                if df.get( 'lang' ) == self.lang:
+                    for t, n in df.get( 'distribution' ):
+                        runtimes.append( ( int( t ), float( n ) ) )
+            except ValueError:
+                pass
+
+        return runtimes
+
+    # @login_required
+    def get_result( self, sid, timeout=30 ):
         url = self.url + '/submissions/detail/%s/check/' % sid
 
-        while True:
+        for i in xrange( timeout ):
             time.sleep( 1 )
             resp = self.session.get( url )
             data = json.loads( resp.text )
             if data.get( 'state' ) == 'SUCCESS':
                 break
+        else:
+            data = { 'error': 'Network Timeout' }
 
         return Result( sid, data )
 
@@ -308,7 +349,10 @@ class CodeShell( cmd.Cmd, OJMixin ):
         return self.cwd() + '> '
 
     def precmd( self, line ):
-        return line.lower()
+        line = line.lower()
+        if line.startswith( '/' ):
+            line = 'find ' + ' '.join( line.split( '/' ) )
+        return line
 
     def emptyline( self ):
         pass
@@ -328,10 +372,18 @@ class CodeShell( cmd.Cmd, OJMixin ):
         else:
             return None
 
+    def load( self ):
+        if not self.tags:
+            self.tags = self.get_tags()
+        if not self.problems:
+            self.problems = self.get_problems()
+            for t, pl in self.tags.iteritems():
+                for pid in pl:
+                    self.problems[ pid ].tags.append( t )
+
     def do_login( self, unused=None ):
         self.login()
-        self.tags = self.get_tags()
-        self.problems = self.get_problems()
+        self.load()
         self.tag = self.pid = self.sid = None
         if self.loggedIn:
             self.do_top()
@@ -358,14 +410,13 @@ class CodeShell( cmd.Cmd, OJMixin ):
             print self.lang
 
     def do_ls( self, _filter ):
-        if not self.tags:
-            self.tags = self.get_tags()
-        if not self.problems:
-            self.problems = self.get_problems()
+        self.load()
 
         if not self.tag:
             for t in sorted( self.tags.keys() ):
                 print '   ', '%3d' % len( self.tags[ t ] ), t
+            self.do_top()
+
         elif not self.pid:
             pl, pd = self.tags.get( self.tag ), {}
             for i in sorted( pl ):
@@ -393,6 +444,18 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
             print p.desc
 
+    def do_find( self, key ):
+        if key:
+            self.load()
+            pl = list( filter( lambda p: p.slug.find( key ) != -1, self.problems.itervalues() ) )
+
+            l = 0
+            for p in sorted( pl, key=lambda p: p.level, reverse=True ):
+                if p.level < l:
+                    print ''
+                print '   ', p
+                l = p.level
+
     def complete_cd( self, text, line, start, end ):
         if self.tag:
             keys = [ str( i ) for i in self.tags[ self.tag ] ]
@@ -419,10 +482,14 @@ class CodeShell( cmd.Cmd, OJMixin ):
             pid = int( tag )
             if pid in self.problems:
                 self.pid = pid
+                if not self.tag:
+                    self.tag = self.problems[ pid ].tags[ 0 ]
 
     def do_cat( self, unused ):
         if os.path.isfile( self.pad ):
-            print self.pad
+            with open( self.test, 'r' ) as f:
+                data = f.read()
+        print self.pad, '<<<', data
 
     def do_pull( self, unused ):
         p = self.problems.get( self.pid )
@@ -449,6 +516,22 @@ class CodeShell( cmd.Cmd, OJMixin ):
                     print result
 
     def do_push( self, unused ):
+        def histogram( t, times, limit=25 ):
+            try:
+                from ascii_graph import Pyasciigraph
+
+                for i in xrange( len( times ) ):
+                    t1, n = times[ i ]
+                    if t1 >= t:
+                        times[ i ] = ( str( t ) + '*', n )
+                        break
+
+                g = Pyasciigraph( graphsymbol='*' )
+                for l in g.graph( 'Runtime' + 66 * ' ' + 'N  ms', times[ :limit ] ):
+                    print l
+            except ImportError:
+                pass
+
         p = self.problems.get( self.pid )
         if p and os.path.isfile( self.pad ):
             with open( self.pad, 'r' ) as f:
@@ -458,6 +541,8 @@ class CodeShell( cmd.Cmd, OJMixin ):
                     self.sid = result.sid
                     if result.success:
                         p.solved = True
+                    runtimes = self.get_solution_runtimes( result.sid )
+                    histogram( result.runtime, runtimes )
                     print result
 
     def do_cheat( self, limit ):
