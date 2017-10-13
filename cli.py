@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import cmd, getpass, json, os, re, sys, time
+import cmd, getpass, json, os, pprint, re, sys, time
 import requests, execjs
 from lxml import html
 from bs4 import BeautifulSoup
@@ -55,9 +55,7 @@ class Solution( object ):
 
 class Result( object ):
     def __init__( self, sid, result ):
-#       import pprint
 #       pprint.pprint( result )
-
         self.sid = sid
         self.success = False
 
@@ -88,7 +86,8 @@ class Result( object ):
         elif status == 10:
             self.success = True
 
-        self.runtime = int( result.get( 'status_runtime', '0' ).replace( 'ms', '' ) )
+        ts = result.get( 'status_runtime', '' ).replace( 'ms', '' )
+        self.runtime = int( ts ) if ts.isdigit() else 0
 
     def __str__( self ):
         limit = 25
@@ -372,10 +371,10 @@ class CodeShell( cmd.Cmd, OJMixin ):
         else:
             return None
 
-    def load( self ):
-        if not self.tags:
+    def load( self, force=False ):
+        if not self.tags or force:
             self.tags = self.get_tags()
-        if not self.problems:
+        if not self.problems or force:
             self.problems = self.get_problems()
             for t, pl in self.tags.iteritems():
                 for pid in pl:
@@ -383,7 +382,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
 
     def do_login( self, unused=None ):
         self.login()
-        self.load()
+        self.load( force=True )
         self.tag = self.pid = self.sid = None
         if self.loggedIn:
             self.do_top()
@@ -442,6 +441,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
             p = self.problems[ self.pid ]
             if not ( p.desc and p.code ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
+            print '[', ', '.join( p.tags ).title(), ']'
             print p.desc
 
     def do_find( self, key ):
@@ -486,10 +486,10 @@ class CodeShell( cmd.Cmd, OJMixin ):
                     self.tag = self.problems[ pid ].tags[ 0 ]
 
     def do_cat( self, unused ):
-        if os.path.isfile( self.pad ):
+        if self.pad and os.path.isfile( self.test ):
             with open( self.test, 'r' ) as f:
                 data = f.read()
-        print self.pad, '<<<', data
+            print self.pad, '<<<', ', '.join( data.splitlines() )
 
     def do_pull( self, unused ):
         p = self.problems.get( self.pid )
@@ -512,7 +512,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 result = self.test_solution( p, code )
                 if result:
                     with open( self.test, 'r' ) as f:
-                        print 'Input:', f.read()
+                        print 'Input:', ', '.join( f.read().splitlines() )
                     print result
 
     def do_push( self, unused ):
@@ -541,8 +541,8 @@ class CodeShell( cmd.Cmd, OJMixin ):
                     self.sid = result.sid
                     if result.success:
                         p.solved = True
-                    runtimes = self.get_solution_runtimes( result.sid )
-                    histogram( result.runtime, runtimes )
+                        runtimes = self.get_solution_runtimes( result.sid )
+                        histogram( result.runtime, runtimes )
                     print result
 
     def do_cheat( self, limit ):
