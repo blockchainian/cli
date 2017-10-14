@@ -8,27 +8,61 @@ from bs4 import BeautifulSoup
 
 class Magic( object ):
     bunnies = [
-        """  (\(\\\n (='.')\no(__")")""",
-        """(\__/)\n(='.'=)\n(")_(")""",
-        """ (\_/)\n=(^.^)=\n(")_(")""",
-        """(\ /)\n( . .)\nc(")(")""",
-        """(\__/)\n(>'.'<)\n(")_(")""",
-        """::: (\_(\\\n *: (=' :') :*\n•.. (,(”)(”)¤°.¸¸.•´¯`»""",
-        """   __//   \n  /.__.\  oops\n  \ \/ /  \n__/    \  \n\-      ) \n \_____/  \n___|_|____\n   " " """,
-        """|￣￣￣￣￣| \n|  LITTLE  |\n|  BUNNY   |\n|  LOVES   |\n|   YOU    |\n|    -xt2  |\n|＿＿＿＿＿| \n(\_/)  || \n(•ㅅ•) || \n/ 　 づ """,
-        """...........(\_/)\n...........( '_')........................ ☻...HELP!!!!\n...../++++++++++++++\======¦¦¦D -------- /▇ \\ \n/====================\..................  ||\n\_@___@___@___@___@__/"""
+"""
+  (\(\\
+ (='.')
+o(__")")""",
+
+"""
+(\__/)
+(='.'=)
+(")_(")""",
+
+"""
+ (\_/)
+=(^.^)=
+(")_(")""",
+
+"""
+(\ /)
+( . .)
+c(")(")""",
+
+"""
+(\__/)
+(>'.'<)
+(")_(")""",
+
+"""
+|￣￣￣￣￣|
+|  LITTLE  |
+|  BUNNY   |
+|  LOVES   |
+|   YOU    |
+|    -xt2  |
+|＿＿＿＿＿|
+(\__/)  ||
+(>'.'<) ||
+(")_(") //""",
+
+"""
+   __//
+  /.__.\  oops
+  \ \/ /
+__/    \\
+\-      )
+ \_____/
+___|_|____
+   " " """,
     ]
     def __init__( self ):
-        self.bunny = random.choice( self.bunnies )
-
-    def show_motd( self ):
-        print self.bunny
+        self.motd = random.choice( self.bunnies )[ 1: ]
 
     def show_message(self, msg):
         self.__owl(msg)
 
     def __owl( self, msg ):
-        print """,___,\n[O.o]  %s\n/)__)\n-"--"-\n""" % msg
+        sys.stdout.write( """,___,\n[O.o]  %s\n/)__)\n-"--"-""" % msg )
 
 
 class Problem( object ):
@@ -88,7 +122,7 @@ class Result( object ):
         def split( s ):
             return s.splitlines() if type( s ) in [ str, unicode ] else s
 
-        self.input = result.get( 'last_testcase', result.get( 'input_formatted', '' ) )
+        self.input = result.get( 'last_testcase', result.get( 'input', '' ) )
         self.output = split( result.get( 'code_output', '' ) )
         self.expected = split( result.get( 'expected_output', '' ) )
         self.debug = split( result.get( 'std_output' ) )
@@ -124,11 +158,10 @@ class Result( object ):
 
         if self.result:
             s += 'Result:'
-            s += '\n' if len( self.result ) > 1 else ' '
-            s += '\n'.join( self.result ) + '\n'
+            s += ', '.join( self.result ) + '\n'
 
         if self.input:
-            s += 'Input: ' + self.input + '\n'
+            s += 'Input: ' + ','.join( self.input.splitlines() ) + '\n'
 
         if self.output:
             s += 'Output:'
@@ -338,7 +371,7 @@ class OJMixin( object ):
         return Result( sid, data )
 
     # @login_required
-    def test_solution( self, p, code, full=False ):
+    def test_solution( self, p, code, tests='', full=False ):
         if full:
             epUrl, sidKey = 'submit/', 'submission_id'
         else:
@@ -358,7 +391,7 @@ class OJMixin( object ):
             'test_mode' : False,
             'question_id' : str( p.pid ),
             'typed_code' : code,
-            'data_input': p.test,
+            'data_input': tests,
         }
 
         resp = self.session.post( url, json=data, headers=headers )
@@ -421,7 +454,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         self.load( force=True )
         self.tag = self.pid = self.sid = None
         if self.loggedIn:
-            self.show_motd()
+            print self.motd
             self.do_top()
 
     def complete_chmod( self, text, line, start, end ):
@@ -530,8 +563,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     def do_cat( self, unused ):
         if self.pad and os.path.isfile( self.test ):
             with open( self.test, 'r' ) as f:
-                data = f.read()
-            print self.pad, '<< [', ', '.join( data.splitlines() ), ']'
+                tests = f.read()
+            print self.pad, '<<', ', '.join( tests.splitlines() )
 
     def do_pull( self, unused ):
         p = self.problems.get( self.pid )
@@ -549,7 +582,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             with open( self.pad, 'w' ) as f:
                 f.write( code )
             with open( self.test, 'w' ) as f:
-                f.write( ', '.join( p.test.splitlines() ) + '\n' )
+                f.write( p.test )
         print self.pad
 
     def do_check( self, unused ):
@@ -557,11 +590,12 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         if p and os.path.isfile( self.pad ):
             with open( self.pad, 'r' ) as f:
                 code = f.read()
-                result = self.test_solution( p, code )
-                if result:
-                    with open( self.test, 'r' ) as f:
-                        print 'Input:', ', '.join( f.read().splitlines() )
-                    print result
+                with open( self.test, 'r' ) as tf:
+                    tests = tf.read()
+                    result = self.test_solution( p, code, tests )
+                    if result:
+                        print 'Input: ', ', '.join( tests.splitlines() )
+                        print result
 
     def do_push( self, unused ):
         def histogram( t, times, limit=25 ):
@@ -593,8 +627,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                         histogram( result.runtime, runtimes )
                     else:
                         with open( self.test, 'a+' ) as f:
-                            if not result.input in f.readlines():
-                                f.write( result.input )
+                            if f.read().find( result.input ) == -1:
+                                f.write( '\n' + result.input )
                     print result
 
     def do_cheat( self, limit ):
