@@ -69,7 +69,7 @@ class Result( object ):
         self.result = result.get( 'code_answer', [] )
         if not self.result:
             total = result.get( 'total_testcases' )
-            passed = result.get( 'compare_result', '' ).count( '1' )
+            passed = result.get( 'total_correct' )
             if total:
                 self.result.append( "%d/%d tests passed" % ( passed, total ) )
 
@@ -86,7 +86,7 @@ class Result( object ):
         elif status == 10:
             self.success = True
 
-        ts = result.get( 'status_runtime', '' ).replace( 'ms', '' )
+        ts = result.get( 'status_runtime', '' ).replace( 'ms', '' ).strip()
         self.runtime = int( ts ) if ts.isdigit() else 0
 
     def __str__( self ):
@@ -160,7 +160,7 @@ class OJMixin( object ):
 
         resp = self.session.post( url, data, headers=headers )
         if self.session.cookies.get( 'LEETCODE_SESSION' ):
-            print 'Welcome %s!\n' % username
+            print 'Welcome %s!' % username
             self.loggedIn = True
 
     def get_tags( self ):
