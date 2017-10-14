@@ -109,7 +109,8 @@ class Solution( object ):
 
     def __str__( self ):
         s = '[%d ms]\n' % self.sid
-        s += self.code
+        for i, l in enumerate( self.code.splitlines() ):
+            s += '%3d %s\n' % ( i, l )
         return s
 
 class Result( object ):
