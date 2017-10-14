@@ -6,6 +6,7 @@ This tool is not affiliated with leetcode.com.
 
 ## Requirements
 
+```sudo apt install nodejs```
 ```sudo pip install requests lxml bs4 PyExecJS ascii_graph```
 
 On Mac OS:
