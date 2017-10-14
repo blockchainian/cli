@@ -60,11 +60,12 @@ class Result( object ):
         self.success = False
 
         def split( s ):
-            s.splitlines() if type( s ) in [ str, unicode ] else s
+            return s.splitlines() if type( s ) in [ str, unicode ] else s
 
-        self.input = result.get( 'last_testcase', '' )
-        self.output = split( result.get( 'std_output', result.get( 'code_output', '' ) ) )
+        self.input = result.get( 'last_testcase', result.get( 'input_formatted', '' ) )
+        self.output = split( result.get( 'code_output', '' ) )
         self.expected = split( result.get( 'expected_output', '' ) )
+        self.debug = split( result.get( 'std_output' ) )
 
         self.result = result.get( 'code_answer', [] )
         if not self.result:
@@ -95,23 +96,28 @@ class Result( object ):
         if s:
             s += '\n'
 
-        if self.input:
-            s += 'Input: ' + self.input + '\n'
-
         if self.result:
             s += 'Result:'
             s += '\n' if len( self.result ) > 1 else ' '
             s += '\n'.join( self.result ) + '\n'
+
+        if self.input:
+            s += 'Input: ' + self.input + '\n'
+
+        if self.output:
+            s += 'Output:'
+            s += '\n' if len( self.output ) > 1 else ' '
+            s += '\n'.join( self.output[ : limit ] ) + '\n'
 
         if self.expected:
             s += 'Expected:'
             s += '\n' if len( self.expected ) > 1 else ' '
             s += '\n'.join( self.expected[ : limit ] ) + '\n'
 
-        if self.output:
-            s += 'Output:'
-            s += '\n' if len( self.output ) > 1 else ' '
-            s += '\n'.join( self.output[ : limit ] ) + '\n'
+        if self.debug:
+            s += 'Debug:'
+            s += '\n' if len( self.debug ) > 1 else ' '
+            s += '\n'.join( self.debug[ : limit ] ) + '\n'
 
         if self.runtime:
             s += 'Time: %d ms' % self.runtime
@@ -494,7 +500,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
         if self.pad and os.path.isfile( self.test ):
             with open( self.test, 'r' ) as f:
                 data = f.read()
-            print self.pad, '<<<', ', '.join( data.splitlines() )
+            print self.pad, '<< [', ', '.join( data.splitlines() ), ']'
 
     def do_pull( self, unused ):
         p = self.problems.get( self.pid )
@@ -505,7 +511,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
             with open( self.pad, 'w' ) as f:
                 f.write( code )
             with open( self.test, 'w' ) as f:
-                f.write( p.test )
+                f.write( ', '.join( p.test.splitlines() ) + '\n' )
 
         print self.pad
 
@@ -548,6 +554,10 @@ class CodeShell( cmd.Cmd, OJMixin ):
                         p.solved = True
                         runtimes = self.get_solution_runtimes( result.sid )
                         histogram( result.runtime, runtimes )
+                    else:
+                        with open( self.test, 'a+' ) as f:
+                            if not result.input in f.readlines():
+                                f.write( result.input )
                     print result
 
     def do_cheat( self, limit ):
