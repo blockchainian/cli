@@ -1,9 +1,35 @@
 #!/usr/bin/env python
+# coding=utf-8
 
-import cmd, getpass, json, os, pprint, re, sys, time
+import cmd, getpass, json, os, pprint, random, re, sys, time
 import requests, execjs
 from lxml import html
 from bs4 import BeautifulSoup
+
+class Magic( object ):
+    bunnies = [
+        """  (\(\\\n (='.')\no(__")")""",
+        """(\__/)\n(='.'=)\n(")_(")""",
+        """ (\_/)\n=(^.^)=\n(")_(")""",
+        """(\ /)\n( . .)\nc(")(")""",
+        """(\__/)\n(>'.'<)\n(")_(")""",
+        """::: (\_(\\\n *: (=' :') :*\n•.. (,(”)(”)¤°.¸¸.•´¯`»""",
+        """   __//   \n  /.__.\  oops\n  \ \/ /  \n__/    \  \n\-      ) \n \_____/  \n___|_|____\n   " " """,
+        """|￣￣￣￣￣| \n|  LITTLE  |\n|  BUNNY   |\n|  LOVES   |\n|   YOU    |\n|    -xt2  |\n|＿＿＿＿＿| \n(\_/)  || \n(•ㅅ•) || \n/ 　 づ """,
+        """...........(\_/)\n...........( '_')........................ ☻...HELP!!!!\n...../++++++++++++++\======¦¦¦D -------- /▇ \\ \n/====================\..................  ||\n\_@___@___@___@___@__/"""
+    ]
+    def __init__( self ):
+        self.bunny = random.choice( self.bunnies )
+
+    def show_motd( self ):
+        print self.bunny
+
+    def show_message(self, msg):
+        self.__owl(msg)
+
+    def __owl( self, msg ):
+        print """,___,\n[O.o]  %s\n/)__)\n-"--"-\n""" % msg
+
 
 class Problem( object ):
     def __init__( self, pid, slug, level, tags=[], status=None, desc='', code='', test='' ):
@@ -344,10 +370,14 @@ class OJMixin( object ):
 
         return result
 
-class CodeShell( cmd.Cmd, OJMixin ):
+class CodeShell( cmd.Cmd, OJMixin, Magic ):
     tags, problems, cheatsheet = {}, {}, {}
     tag = pid = sid = None
     test = '/tmp/test.dat'
+
+    def __init__( self ):
+        cmd.Cmd.__init__( self )
+        Magic.__init__( self )
 
     @property
     def prompt( self ):
@@ -391,6 +421,7 @@ class CodeShell( cmd.Cmd, OJMixin ):
         self.load( force=True )
         self.tag = self.pid = self.sid = None
         if self.loggedIn:
+            self.show_motd()
             self.do_top()
 
     def complete_chmod( self, text, line, start, end ):
@@ -508,11 +539,17 @@ class CodeShell( cmd.Cmd, OJMixin ):
             if not ( p.desc and p.code ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
             code = self.get_latest_solution( p )
+            if os.path.isfile( self.pad ):
+                self.show_message("Overwrite? (y/N)")
+                try:
+                    if raw_input().lower() not in [ 'y', 'yes']:
+                        return
+                except EOFError:
+                    return
             with open( self.pad, 'w' ) as f:
                 f.write( code )
             with open( self.test, 'w' ) as f:
                 f.write( ', '.join( p.test.splitlines() ) + '\n' )
-
         print self.pad
 
     def do_check( self, unused ):
@@ -581,7 +618,6 @@ class CodeShell( cmd.Cmd, OJMixin ):
                 failed += 1
             else:
                 todo += 1
-
         print '%d solved %d failed %d todo' % ( solved, failed, todo )
 
     def do_clear( self, unused ):
