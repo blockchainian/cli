@@ -58,12 +58,11 @@ ___|_|____
     def __init__( self ):
         self.motd = random.choice( self.bunnies )[ 1: ]
 
-    def show_message(self, msg):
+    def magic(self, msg):
         self.__owl(msg)
 
     def __owl( self, msg ):
         sys.stdout.write( """,___,\n[O.o]  %s\n/)__)\n-"--"-""" % msg )
-
 
 class Problem( object ):
     def __init__( self, pid, slug, level, tags=[], status=None, desc='', code='', test='' ):
@@ -406,7 +405,7 @@ class OJMixin( object ):
 class CodeShell( cmd.Cmd, OJMixin, Magic ):
     tags, problems, cheatsheet = {}, {}, {}
     tag = pid = sid = None
-    test = '/tmp/test.dat'
+    tests = '/tmp/tests.dat'
 
     def __init__( self ):
         cmd.Cmd.__init__( self )
@@ -561,8 +560,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     self.tag = self.problems[ pid ].tags[ 0 ]
 
     def do_cat( self, unused ):
-        if self.pad and os.path.isfile( self.test ):
-            with open( self.test, 'r' ) as f:
+        if self.pad and os.path.isfile( self.tests ):
+            with open( self.tests, 'r' ) as f:
                 tests = f.read()
             print self.pad, '<<', ', '.join( tests.splitlines() )
 
@@ -573,7 +572,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
             code = self.get_latest_solution( p )
             if os.path.isfile( self.pad ):
-                self.show_message("Overwrite? (y/N)")
+                self.magic( "Replace working copy? (y/N)" )
                 try:
                     if raw_input().lower() not in [ 'y', 'yes']:
                         return
@@ -581,7 +580,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     return
             with open( self.pad, 'w' ) as f:
                 f.write( code )
-            with open( self.test, 'w' ) as f:
+            with open( self.tests, 'w' ) as f:
                 f.write( p.test )
         print self.pad
 
@@ -590,7 +589,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         if p and os.path.isfile( self.pad ):
             with open( self.pad, 'r' ) as f:
                 code = f.read()
-                with open( self.test, 'r' ) as tf:
+                with open( self.tests, 'r' ) as tf:
                     tests = tf.read()
                     result = self.test_solution( p, code, tests )
                     if result:
@@ -626,7 +625,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                         runtimes = self.get_solution_runtimes( result.sid )
                         histogram( result.runtime, runtimes )
                     else:
-                        with open( self.test, 'a+' ) as f:
+                        with open( self.tests, 'a+' ) as f:
                             if f.read().find( result.input ) == -1:
                                 f.write( '\n' + result.input )
                     print result
