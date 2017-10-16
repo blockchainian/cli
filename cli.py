@@ -621,8 +621,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 result = self.test_solution( p, code, full=True )
                 if result:
                     self.sid = result.sid
+                    p.solved = result.success
                     if result.success:
-                        p.solved = True
                         runtimes = self.get_solution_runtimes( result.sid )
                         histogram( result.runtime, runtimes )
                     else:
