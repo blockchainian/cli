@@ -65,15 +65,13 @@ ___|_|____
         sys.stdout.write( """,___,\n[O.o]  %s\n/)__)\n-"--"-""" % msg )
 
 class Problem( object ):
-    def __init__( self, pid, slug, level, tags=[], status=None, desc='', code='', test='' ):
+    def __init__( self, pid, slug, level, tags=[], status=None ):
         self.pid = pid
         self.slug = slug
         self.level = level
         self.tags = tags[ : ]
-        self.desc = desc
-        self.code = code
-        self.test = test
         self.status = status
+        self.desc = self.code = self.test = ''
 
     def __str__( self ):
         if self.solved:
@@ -404,13 +402,15 @@ class OJMixin( object ):
         return result
 
 class CodeShell( cmd.Cmd, OJMixin, Magic ):
+    ws = './ws'
     tags, problems, cheatsheet = {}, {}, {}
     tag = pid = sid = None
-    tests = '/tmp/tests.dat'
 
     def __init__( self ):
         cmd.Cmd.__init__( self )
         Magic.__init__( self )
+        if not os.path.exists( self.ws ):
+            os.makedirs( self.ws )
 
     @property
     def prompt( self ):
@@ -436,9 +436,12 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     @property
     def pad( self ):
         if self.pid:
-            return '/tmp/%d.%s' % ( self.pid, self.suffix )
+            return '%s/%d.%s' % ( self.ws, self.pid, self.suffix )
         else:
             return None
+    @property
+    def tests( self ):
+        return '%s/tests.dat' % self.ws
 
     def load( self, force=False ):
         if not self.tags or force:
@@ -557,8 +560,9 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             pid = int( tag )
             if pid in self.problems:
                 self.pid = pid
-                if not self.tag:
-                    self.tag = self.problems[ pid ].tags[ 0 ]
+                tags = self.problems[ pid ].tags
+                if not self.tag in tags:
+                    self.tag = tags[ 0 ]
 
     def do_cat( self, unused ):
         if self.pad and os.path.isfile( self.tests ):
