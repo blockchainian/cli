@@ -450,7 +450,12 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             self.problems = self.get_problems()
             for t, pl in self.tags.iteritems():
                 for pid in pl:
-                    self.problems[ pid ].tags.append( t )
+                    p = self.problems.get( pid )
+                    if p:
+                        p.tags.append( t )
+                    else:
+#                       print 'Missing %s/%d' % ( t, pid )
+                        self.tags[ t ].remove( pid )
 
     def do_login( self, unused=None ):
         self.login()
