@@ -405,6 +405,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     ws = 'ws'
     tags, problems, cheatsheet = {}, {}, {}
     tag = pid = sid = None
+    xlimit = 0
 
     def __init__( self ):
         cmd.Cmd.__init__( self )
@@ -454,12 +455,22 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     if p:
                         p.tags.append( t )
                     else:
-#                       print 'Missing %s/%d' % ( t, pid )
                         self.tags[ t ].remove( pid )
+
+    def limit( self, limit ):
+        self.xlimit = limit
+        if self.xlimit:
+            for pid in self.problems.keys():
+                if pid > self.xlimit:
+                    del self.problems[ pid ]
+
+            for t, pl in self.tags.iteritems():
+                self.tags[ t ] = list( filter( lambda i : i <= self.xlimit, pl ) )
 
     def do_login( self, unused=None ):
         self.login()
         self.load( force=True )
+        self.limit( self.xlimit )
         self.tag = self.pid = self.sid = None
         if self.loggedIn:
             print self.motd
@@ -662,6 +673,15 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             else:
                 todo += 1
         print '%d solved %d failed %d todo' % ( solved, failed, todo )
+
+    def do_limit( self, limit ):
+        if limit.isdigit():
+            limit = int( limit )
+            if limit > self.xlimit:
+                self.load( force=True )
+            self.limit( limit )
+        elif self.xlimit:
+            print self.xlimit
 
     def do_clear( self, unused ):
         os.system( 'clear' )
