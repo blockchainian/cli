@@ -402,7 +402,7 @@ class OJMixin( object ):
         return result
 
 class CodeShell( cmd.Cmd, OJMixin, Magic ):
-    ws = './ws'
+    ws = 'ws'
     tags, problems, cheatsheet = {}, {}, {}
     tag = pid = sid = None
 
