@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding=utf-8
 
 import cmd, getpass, json, os, pprint, random, re, sys, time
 import requests, execjs
@@ -34,13 +33,13 @@ c(")(")""",
 (")_(")""",
 
 """
-|￣￣￣￣￣|
+++++++++++++
 |  LITTLE  |
 |  BUNNY   |
 |  LOVES   |
 |   YOU    |
 |    -xt2  |
-|＿＿＿＿＿|
+++++++++++++
 (\__/)  ||
 (>'.'<) ||
 (")_(") //""",
@@ -58,11 +57,11 @@ ___|_|____
     def __init__( self ):
         self.motd = random.choice( self.bunnies )[ 1: ]
 
-    def magic(self, msg):
-        self.__owl(msg)
+    def magic( self, msg ):
+        return self.__owl( msg )
 
     def __owl( self, msg ):
-        sys.stdout.write( """,___,\n[O.o]  %s\n/)__)\n-"--"-""" % msg )
+        return """,___,\n[O.o]  %s\n/)__)\n-"--"-""" % msg
 
 class Problem( object ):
     def __init__( self, pid, slug, level, tags=[], status=None ):
@@ -364,7 +363,7 @@ class OJMixin( object ):
             if data.get( 'state' ) == 'SUCCESS':
                 break
         else:
-            data = { 'error': 'Network Timeout' }
+            data = { 'error': '< network timeout >' }
 
         return Result( sid, data )
 
@@ -577,7 +576,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             if pid in self.problems:
                 self.pid = pid
                 tags = self.problems[ pid ].tags
-                if not self.tag in tags:
+                if self.tag not in tags:
                     self.tag = tags[ 0 ]
 
     def do_cat( self, unused ):
@@ -592,18 +591,20 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             if not ( p.desc and p.code ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
             code = self.get_latest_solution( p )
+            wr = True
             if os.path.isfile( self.pad ):
-                self.magic( "Replace working copy? (y/N)" )
+                prompt = self.magic( "Replace working copy? (y/N)" )
                 try:
-                    if raw_input().lower() not in [ 'y', 'yes']:
-                        return
+                    if raw_input( prompt ).lower() in [ 'n', 'no']:
+                        wr = False
                 except EOFError:
                     return
-            with open( self.pad, 'w' ) as f:
-                f.write( code )
+            if wr:
+                with open( self.pad, 'w' ) as f:
+                    f.write( code )
             with open( self.tests, 'w' ) as f:
                 f.write( p.test )
-        print self.pad
+            print self.pad
 
     def do_check( self, unused ):
         p = self.problems.get( self.pid )
@@ -660,7 +661,10 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
             limit = min( len( cs ), max( int( limit ), 1 ) if limit else 1 )
             for i in xrange( limit ):
-                print cs[ i ]
+                try:
+                    print cs[ i ]
+                except UnicodeEncodeError:
+                    print '< non-printable >'
 
     def do_top( self, unused=None ):
         solved = failed = todo = 0

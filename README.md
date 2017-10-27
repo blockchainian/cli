@@ -27,9 +27,9 @@ ls
 
 cd < tag | problem | .. >
 
-cat
-
 pull
+
+cat
 
 check
 
@@ -38,6 +38,8 @@ push
 cheat < number of examples >
 
 clear
+
+limit < number of problems >
 
 top
 ```
