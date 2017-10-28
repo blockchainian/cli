@@ -263,14 +263,14 @@ class OJMixin( object ):
 
         soup = BeautifulSoup( resp.text, 'lxml' )
         for e in soup.find_all( 'div', attrs=cls ):
-            desc = e.text
+            desc = e.text.strip( '\r' )
             break
 
         for s in re.findall( js, resp.text, re.DOTALL ):
             v = execjs.eval( s )
             for cs in v.get( 'codeDefinition' ):
                 if cs.get( 'text' ) == self.language:
-                    code = cs.get( 'defaultCode' )
+                    code = cs.get( 'defaultCode', '' ).strip( '\r' )
             test = v.get( 'sampleTestCase' )
             break
 
@@ -496,7 +496,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         else:
             print self.lang
 
-    def do_ls( self, _filter ):
+    def do_ls( self, unused=None ):
         self.load()
 
         if not self.tag:
@@ -535,7 +535,10 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             if not ( p.desc and p.code ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
             print '[', ', '.join( p.tags ).title(), ']'
-            print p.desc
+            try:
+                print p.desc
+            except UnicodeEncodeError:
+                print '\n...\n'
 
     def do_find( self, key ):
         if key:
@@ -665,6 +668,36 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     print cs[ i ]
                 except UnicodeEncodeError:
                     print '< non-printable >'
+
+    def do_print( self, unused ):
+        def order( i, j ):
+            a = ( -self.problems[ i ].level, i )
+            b = ( -self.problems[ j ].level, j )
+            return 1 if a > b else -1 if a < b else 0
+
+        self.load()
+        xtag, xpid, xout = self.tag, self.pid, sys.stdout
+        printed = set()
+
+        sys.stdout = open( self.ws + '/problems.rst', 'w' )
+        for tag in sorted( self.tags ):
+            ol = '-' * len( tag )
+            print ol +  '\n' + tag + '\n' + ol + '\n'
+            self.tag = tag
+
+            for pid in sorted( self.tags.get( tag, [] ), order ):
+                if pid not in printed:
+                    slug = self.problems[ pid ].slug
+                    print '\n**%d %s**\n' % ( pid, slug )
+
+                    self.pid = pid
+                    self.do_ls()
+                    printed.add( pid )
+                    xout.write( '\r%d' % len( printed ) )
+                    xout.flush()
+        sys.stdout.close()
+
+        self.tag, self.pid, sys.stdout = xtag, xpid, xout
 
     def do_top( self, unused=None ):
         solved = failed = todo = 0
