@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
-import cmd, getpass, json, os, pprint, random, re, sys, time
-import requests, execjs
+import cmd, contextlib, getpass, json, os, pprint, random, re, sys, time
+import bs4, execjs, requests
 from lxml import html
-from bs4 import BeautifulSoup
 
 class Magic( object ):
     bunnies = [
@@ -64,11 +63,11 @@ ___|_|____
         return """,___,\n[O.o]  %s\n/)__)\n-"--"-""" % msg
 
 class Problem( object ):
-    def __init__( self, pid, slug, level, tags=[], status=None ):
+    def __init__( self, pid, slug, level, topics=[], status=None ):
         self.pid = pid
         self.slug = slug
         self.level = level
-        self.tags = tags[ : ]
+        self.topics = topics[ : ]
         self.status = status
         self.desc = self.code = self.test = ''
 
@@ -229,14 +228,21 @@ class OJMixin( object ):
         url = self.url + '/problems/api/tags/'
 
         resp = self.session.get( url )
+        data = json.loads( resp.text )
 
-        tags = {}
-        for e in json.loads( resp.text ).get( 'topics' ):
+        topics = {}
+        for e in data.get( 'topics' ):
             t = e.get( 'slug' )
             ql = e.get( 'questions' )
-            tags[ t ] = ql
+            topics[ t ] = ql
 
-        return tags
+        companies = {}
+        for e in data.get( 'companies' ):
+            c = e.get( 'slug' )
+            ql = e.get( 'questions' )
+            companies[ c ] = set( ql )
+
+        return ( topics, companies )
 
     def get_problems( self ):
         url = self.url + '/api/problems/all/'
@@ -261,7 +267,7 @@ class OJMixin( object ):
         resp = self.session.get( url )
         desc = code = test = ''
 
-        soup = BeautifulSoup( resp.text, 'lxml' )
+        soup = bs4.BeautifulSoup( resp.text, 'lxml' )
         for e in soup.find_all( 'div', attrs=cls ):
             desc = e.text.strip( '\r' )
             break
@@ -402,8 +408,8 @@ class OJMixin( object ):
 
 class CodeShell( cmd.Cmd, OJMixin, Magic ):
     ws = 'ws'
-    tags, problems, cheatsheet = {}, {}, {}
-    tag = pid = sid = None
+    topics, companies, problems, cheatsheet = {}, {}, {}, {}
+    topic = pid = sid = None
     xlimit = 0
 
     def __init__( self ):
@@ -427,8 +433,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
     def cwd( self ):
         wd = '/'
-        if self.tag:
-            wd += self.tag
+        if self.topic:
+            wd += self.topic
             if self.pid:
                 wd += '/%d-%s' % ( self.pid, self.problems[ self.pid ].slug )
         return wd
@@ -444,17 +450,17 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         return '%s/tests.dat' % self.ws
 
     def load( self, force=False ):
-        if not self.tags or force:
-            self.tags = self.get_tags()
+        if not self.topics or force:
+            self.topics, self.companies = self.get_tags()
         if not self.problems or force:
             self.problems = self.get_problems()
-            for t, pl in self.tags.iteritems():
-                for pid in pl:
+            for t in sorted( self.topics.iterkeys() ):
+                for pid in self.topics[ t ]:
                     p = self.problems.get( pid )
                     if p:
-                        p.tags.append( t )
+                        p.topics.append( t )
                     else:
-                        self.tags[ t ].remove( pid )
+                        self.topics[ t ].remove( pid )
 
     def limit( self, limit ):
         self.xlimit = limit
@@ -463,14 +469,40 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 if pid > self.xlimit:
                     del self.problems[ pid ]
 
-            for t, pl in self.tags.iteritems():
-                self.tags[ t ] = list( filter( lambda i : i <= self.xlimit, pl ) )
+            for t, pl in self.topics.iteritems():
+                self.topics[ t ] = list( filter( lambda i : i <= self.xlimit, pl ) )
+
+            for t, pl in self.companies.iteritems():
+                self.companies[ t ] = set( filter( lambda i : i <= self.xlimit, pl ) )
+
+    @contextlib.contextmanager
+    def count( self, pl ):
+        solved = failed = todo = 0
+        for p in pl:
+            if p.solved:
+                solved += 1
+            elif p.failed:
+                failed += 1
+            else:
+                todo += 1
+        yield
+        if pl:
+            print '%d solved %d failed %d todo' % ( solved, failed, todo )
+
+    def list( self, pl ):
+        with self.count( pl ):
+            l = 0
+            for p in sorted( pl, key=lambda p: ( -p.level, p.pid ) ):
+                if p.level < l:
+                    print ''
+                print '   ', p
+                l = p.level
 
     def do_login( self, unused=None ):
         self.login()
         self.load( force=True )
         self.limit( self.xlimit )
-        self.tag = self.pid = self.sid = None
+        self.topic = self.pid = self.sid = None
         if self.loggedIn:
             print self.motd
             self.do_top()
@@ -497,11 +529,9 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             print self.lang
 
     def do_ls( self, unused=None ):
-        self.load()
-
-        if not self.tag:
-            for t in sorted( self.tags.keys() ):
-                pl = self.tags[ t ]
+        if not self.topic:
+            for t in sorted( self.topics.keys() ):
+                pl = self.topics[ t ]
                 todo = 0
                 for pid in pl:
                     if not self.problems[ pid ].solved:
@@ -510,31 +540,13 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             self.do_top()
 
         elif not self.pid:
-            pl, pd = self.tags.get( self.tag ), {}
-            for i in sorted( pl ):
-                p = self.problems[ i ]
-
-                if p.level not in pd:
-                    pd[ p.level ] = []
-                pd[ p.level ].append( p )
-
-            solved = failed = todo = 0
-            for l in sorted( pd.keys(), reverse=True ):
-                for p in pd[ l ]:
-                    print '   ', p
-                    if p.solved:
-                        solved += 1
-                    elif p.failed:
-                        failed += 1
-                    else:
-                        todo += 1
-                print ''
-            print '%d solved %d failed %d todo' % ( solved, failed, todo )
+            pl = [ self.problems[ i ] for i in self.topics.get( self.topic ) ]
+            self.list( pl )
         else:
             p = self.problems[ self.pid ]
             if not ( p.desc and p.code ):
                 p.desc, p.code, p.test = self.get_problem( p.slug )
-            print '[', ', '.join( p.tags ).title(), ']'
+            print '[', ', '.join( p.topics ).title(), ']'
             try:
                 print p.desc
             except UnicodeEncodeError:
@@ -542,21 +554,18 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
     def do_find( self, key ):
         if key:
-            self.load()
-            pl = list( filter( lambda p: p.slug.find( key ) != -1, self.problems.itervalues() ) )
-
-            l = 0
-            for p in sorted( pl, key=lambda p: p.level, reverse=True ):
-                if p.level < l:
-                    print ''
-                print '   ', p
-                l = p.level
+            if key in self.companies:
+                fn = lambda p: p.pid in self.companies[ key ]
+            else:
+                fn = lambda p: p.slug.find( key ) != -1
+            pl = list( filter( fn, self.problems.itervalues() ) )
+            self.list( pl )
 
     def complete_cd( self, text, line, start, end ):
-        if self.tag:
-            keys = [ str( i ) for i in self.tags[ self.tag ] ]
+        if self.topic:
+            keys = [ str( i ) for i in self.topics[ self.topic ] ]
         else:
-            keys = self.tags.keys()
+            keys = self.topics.keys()
         prefix, suffixes = ' '.join( line.split()[ 1: ] ), []
 
         for t in sorted( keys ):
@@ -566,21 +575,21 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
         return [ text + s for s in suffixes ]
 
-    def do_cd( self, tag ):
-        if tag == '..':
+    def do_cd( self, arg ):
+        if arg == '..':
             if self.pid:
                 self.pid = None
-            elif self.tag:
-                self.tag = None
-        elif tag in self.tags:
-            self.tag = tag
-        elif tag.isdigit():
-            pid = int( tag )
+            elif self.topic:
+                self.topic = None
+        elif arg in self.topics:
+            self.topic = arg
+        elif arg.isdigit():
+            pid = int( arg )
             if pid in self.problems:
                 self.pid = pid
-                tags = self.problems[ pid ].tags
-                if self.tag not in tags:
-                    self.tag = tags[ 0 ]
+                topics = self.problems[ pid ].topics
+                if self.topic not in topics:
+                    self.topic = topics[ 0 ]
 
     def do_cat( self, unused ):
         if self.pad and os.path.isfile( self.tests ):
@@ -675,21 +684,19 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             b = ( -self.problems[ j ].level, j )
             return 1 if a > b else -1 if a < b else 0
 
-        self.load()
-        xtag, xpid, xout = self.tag, self.pid, sys.stdout
+        xtopic, xpid, xout = self.topic, self.pid, sys.stdout
         printed = set()
 
         sys.stdout = open( self.ws + '/problems.rst', 'w' )
-        for tag in sorted( self.tags ):
-            ol = '-' * len( tag )
-            print ol +  '\n' + tag + '\n' + ol + '\n'
-            self.tag = tag
+        for topic in sorted( self.topics ):
+            ol = '-' * len( topic )
+            print ol +  '\n' + topic + '\n' + ol + '\n'
+            self.topic = topic
 
-            for pid in sorted( self.tags.get( tag, [] ), order ):
+            for pid in sorted( self.topics.get( topic, [] ), order ):
                 if pid not in printed:
                     slug = self.problems[ pid ].slug
                     print '\n**%d %s**\n' % ( pid, slug )
-
                     self.pid = pid
                     self.do_ls()
                     printed.add( pid )
@@ -697,19 +704,11 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     xout.flush()
         sys.stdout.close()
 
-        self.tag, self.pid, sys.stdout = xtag, xpid, xout
+        self.topic, self.pid, sys.stdout = xtopic, xpid, xout
 
     def do_top( self, unused=None ):
-        solved = failed = todo = 0
-
-        for p in self.problems.itervalues():
-            if p.solved:
-                solved += 1
-            elif p.failed:
-                failed += 1
-            else:
-                todo += 1
-        print '%d solved %d failed %d todo' % ( solved, failed, todo )
+        with self.count( self.problems.itervalues() ):
+            pass
 
     def do_limit( self, limit ):
         if limit.isdigit():
