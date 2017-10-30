@@ -454,13 +454,17 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             self.topics, self.companies = self.get_tags()
         if not self.problems or force:
             self.problems = self.get_problems()
+            pl = set( self.problems.iterkeys() )
             for t in sorted( self.topics.iterkeys() ):
                 for pid in self.topics[ t ]:
                     p = self.problems.get( pid )
                     if p:
                         p.topics.append( t )
+                        pl.discard( pid )
                     else:
                         self.topics[ t ].remove( pid )
+            map( lambda i: self.problems[ i ].topics.append( '#' ), pl )
+            self.topics[ '#' ] = list( sorted( pl ) )
 
     def limit( self, limit ):
         self.xlimit = limit
