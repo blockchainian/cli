@@ -64,12 +64,13 @@ ___|_|____
 
 class Problem( object ):
     def __init__( self, pid, slug, level, topics=[], status=None ):
+        self.loaded = False
         self.pid = pid
         self.slug = slug
         self.level = level
         self.topics = topics[ : ]
         self.status = status
-        self.desc = self.code = self.test = ''
+        self.desc = self.code = self.test = self.html = ''
 
     def __str__( self ):
         if self.solved:
@@ -135,13 +136,16 @@ class Result( object ):
             m = result.get( e )
             if m:
                 self.errors.append( m )
+
         status = result.get( 'status_code' )
-        if status == 13:
+        if status == 10:
+            self.success = True
+        elif status == 12:
+            self.errors.append( 'Memory Limit Exceeded' )
+        elif status == 13:
             self.errors.append( 'Output Limit Exceeded' )
         elif status == 14:
             self.errors.append( 'Time limit Exceeded' )
-        elif status == 10:
-            self.success = True
 
         ts = result.get( 'status_runtime', '' ).replace( 'ms', '' ).strip()
         self.runtime = int( ts ) if ts.isdigit() else 0
@@ -259,28 +263,28 @@ class OJMixin( object ):
 
         return problems
 
-    def get_problem( self, slug ):
-        url = self.url + '/problems/%s/description/' % slug
+    def get_problem( self, p ):
+        url = self.url + '/problems/%s/description/' % p.slug
         cls = { 'class' : 'question-description' }
         js = r'var pageData =\s*(.*?);'
 
         resp = self.session.get( url )
-        desc = code = test = ''
 
         soup = bs4.BeautifulSoup( resp.text, 'lxml' )
         for e in soup.find_all( 'div', attrs=cls ):
-            desc = e.text.strip( '\r' )
+            p.desc = e.text.strip( '\r' )
+            p.html = e.prettify()
             break
 
         for s in re.findall( js, resp.text, re.DOTALL ):
             v = execjs.eval( s )
             for cs in v.get( 'codeDefinition' ):
                 if cs.get( 'text' ) == self.language:
-                    code = cs.get( 'defaultCode', '' ).strip( '\r' )
-            test = v.get( 'sampleTestCase' )
+                    p.code = cs.get( 'defaultCode', '' ).strip( '\r' )
+            p.test = v.get( 'sampleTestCase' )
             break
 
-        return ( desc, code, test )
+        p.loaded = bool( p.desc and p.test and p.code )
 
     # @login_required
     def get_latest_solution( self, p ):
@@ -548,8 +552,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             self.list( pl )
         else:
             p = self.problems[ self.pid ]
-            if not ( p.desc and p.code ):
-                p.desc, p.code, p.test = self.get_problem( p.slug )
+            if not p.loaded:
+                self.get_problem( p )
             print '[', ', '.join( p.topics ).title(), ']'
             try:
                 print p.desc
@@ -604,8 +608,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     def do_pull( self, unused ):
         p = self.problems.get( self.pid )
         if p:
-            if not ( p.desc and p.code ):
-                p.desc, p.code, p.test = self.get_problem( p.slug )
+            if not p.loaded:
+                self.get_problem( p )
             code = self.get_latest_solution( p )
             wr = True
             if os.path.isfile( self.pad ):
@@ -682,33 +686,39 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 except UnicodeEncodeError:
                     print '< non-printable >'
 
-    def do_print( self, unused ):
+    def do_print( self, key ):
         def order( i, j ):
             a = ( -self.problems[ i ].level, i )
             b = ( -self.problems[ j ].level, j )
             return 1 if a > b else -1 if a < b else 0
 
-        xtopic, xpid, xout = self.topic, self.pid, sys.stdout
-        printed = set()
+        if key in self.topics:
+            topics = { key: self.topics[ key ] }
+        elif key in self.companies:
+            topics = { key: self.companies[ key ] }
+        else:
+            topics, key = self.topics, 'all'
+        done = set()
+        xout, sys.stdout = sys.stdout, open( self.ws + '/%s.html' % key, 'w' )
 
-        sys.stdout = open( self.ws + '/problems.rst', 'w' )
-        for topic in sorted( self.topics ):
-            ol = '-' * len( topic )
-            print ol +  '\n' + topic + '\n' + ol + '\n'
-            self.topic = topic
-
-            for pid in sorted( self.topics.get( topic, [] ), order ):
-                if pid not in printed:
-                    slug = self.problems[ pid ].slug
-                    print '\n**%d %s**\n' % ( pid, slug )
-                    self.pid = pid
-                    self.do_ls()
-                    printed.add( pid )
-                    xout.write( '\r%d' % len( printed ) )
+        for t in sorted( topics ):
+            print '<h2>' + t.title() + '</h2>'
+            for pid in sorted( topics.get( t, [] ), order ):
+                if pid not in done:
+                    p = self.problems[ pid ]
+                    if not p.loaded:
+                        self.get_problem( p )
+                    title = ' '.join( [ w.title() for w in p.slug.split( '-' ) ] )
+                    try:
+                        print '<h3>%d %s</h3>%s' % ( pid, title, p.html )
+                        print '<p>[', ', '.join( p.topics ).title(), ']</p>'
+                    except UnicodeEncodeError:
+                        pass
+                    done.add( pid )
+                    xout.write( '\r%d' % len( done ) )
                     xout.flush()
         sys.stdout.close()
-
-        self.topic, self.pid, sys.stdout = xtopic, xpid, xout
+        sys.stdout = xout
 
     def do_top( self, unused=None ):
         with self.count( self.problems.itervalues() ):
