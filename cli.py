@@ -692,6 +692,14 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             b = ( -self.problems[ j ].level, j )
             return 1 if a > b else -1 if a < b else 0
 
+        def title( p ):
+            s = str( p.pid ) + ' ' + p.slug.replace( '-', ' ' ).title()
+            if p.todo:
+                s = '<font color="blue">' + s + '</font>'
+            elif p.failed:
+                s = '<font color="red">' + s + '</font>'
+            return '<h3>%s</h3>' % s
+
         if key in self.topics:
             topics = { key: self.topics[ key ] }
         elif key in self.companies:
@@ -699,8 +707,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         else:
             topics, key = self.topics, 'all'
         done = set()
-        xout, sys.stdout = sys.stdout, open( self.ws + '/%s.html' % key, 'w' )
 
+        xout, sys.stdout = sys.stdout, open( self.ws + '/%s.html' % key, 'w' )
         for t in sorted( topics ):
             print '<h2>' + t.title() + '</h2>'
             for pid in sorted( topics.get( t, [] ), order ):
@@ -708,9 +716,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     p = self.problems[ pid ]
                     if not p.loaded:
                         self.get_problem( p )
-                    title = ' '.join( [ w.title() for w in p.slug.split( '-' ) ] )
                     try:
-                        print '<h3>%d %s</h3>%s' % ( pid, title, p.html )
+                        print title( p ) + p.html
                         print '<p>[', ', '.join( p.topics ).title(), ']</p>'
                     except UnicodeEncodeError:
                         pass
