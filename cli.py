@@ -263,6 +263,9 @@ class OJMixin( object ):
 
         return problems
 
+    def strip( self, s ):
+        return s.replace( '\r', '' )
+
     def get_problem( self, p ):
         url = self.url + '/problems/%s/description/' % p.slug
         cls = { 'class' : 'question-description' }
@@ -272,7 +275,7 @@ class OJMixin( object ):
 
         soup = bs4.BeautifulSoup( resp.text, 'lxml' )
         for e in soup.find_all( 'div', attrs=cls ):
-            p.desc = e.text.strip( '\r' )
+            p.desc = self.strip( e.text )
             p.html = e.prettify()
             break
 
@@ -280,7 +283,7 @@ class OJMixin( object ):
             v = execjs.eval( s )
             for cs in v.get( 'codeDefinition' ):
                 if cs.get( 'text' ) == self.language:
-                    p.code = cs.get( 'defaultCode', '' ).strip( '\r' )
+                    p.code = self.strip( cs.get( 'defaultCode', '' ) )
             p.test = v.get( 'sampleTestCase' )
             break
 
@@ -304,7 +307,7 @@ class OJMixin( object ):
         resp = self.session.post( url, json=data, headers=headers )
 
         try:
-            code = json.loads( resp.text ).get( 'code' )
+            code = self.strip( json.loads( resp.text ).get( 'code' ) )
         except ValueError:
             code = p.code
         return code
@@ -605,26 +608,38 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 tests = f.read()
             print self.pad, '<<', ', '.join( tests.splitlines() )
 
-    def do_pull( self, unused ):
-        p = self.problems.get( self.pid )
-        if p:
-            if not p.loaded:
-                self.get_problem( p )
-            code = self.get_latest_solution( p )
-            wr = True
-            if os.path.isfile( self.pad ):
+    def do_pull( self, arg ):
+        sync = arg is '*'
+        def writable( p ):
+            if sync:
+                w = p.solved
+            elif not os.path.isfile( self.pad ):
+                w = True
+            else:
                 prompt = self.magic( "Replace working copy? (y/N)" )
                 try:
-                    if raw_input( prompt ).lower() in [ 'n', 'no']:
-                        wr = False
+                    w = raw_input( prompt ).lower() in [ 'y', 'yes']
                 except EOFError:
-                    return
-            if wr:
-                with open( self.pad, 'w' ) as f:
-                    f.write( code )
-            with open( self.tests, 'w' ) as f:
-                f.write( p.test )
-            print self.pad
+                    w = False
+            return w
+
+        pl, xpid = sorted( self.problems ) if sync else [ self.pid ], self.pid
+        for pid in pl:
+            p = self.problems.get( pid )
+            if p:
+                if not p.loaded:
+                    self.get_problem( p )
+
+                if writable( p ):
+                    code = self.get_latest_solution( p )
+                    self.pid = pid
+                    with open( self.pad, 'w' ) as f:
+                        f.write( code )
+                    print self.pad
+
+                with open( self.tests, 'w' ) as f:
+                    f.write( p.test )
+        self.pid = xpid
 
     def do_check( self, unused ):
         p = self.problems.get( self.pid )
