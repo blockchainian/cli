@@ -19,6 +19,8 @@ On Mac OS:
 ```
 login
 
+su <session>
+
 chmod < language >
 
 ls
