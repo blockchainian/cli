@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import cmd, contextlib, getpass, json, os, pprint, random, re, sys, time
+import cmd, contextlib, functools, getpass, json, os, pprint, random, re, sys, time
 import bs4, execjs, requests
 from lxml import html
 
@@ -182,6 +182,15 @@ class Result( object ):
             s += 'Time: %d ms' % self.runtime
         return s
 
+class Session( object ):
+    def __init__( self, sid, name, active ):
+        self.sid = sid
+        self.name = name if name else '#'
+        self.active = active
+
+    def __str__( self ):
+        return '*' if self.active else '' + self.name
+
 class OJMixin( object ):
     url = 'https://leetcode.com'
     langs = [ 'c', 'cpp', 'golang', 'java', 'javascript', 'python', 'scala' ]
@@ -211,8 +220,6 @@ class OJMixin( object ):
         password = getpass.getpass()
 
         self.session.cookies.clear()
-        self.loggedIn = False
-
         resp = self.session.get( url )
         csrf = list( set( html.fromstring( resp.text ).xpath( xpath ) ) )[ 0 ]
 
@@ -225,8 +232,52 @@ class OJMixin( object ):
 
         resp = self.session.post( url, data, headers=headers )
         if self.session.cookies.get( 'LEETCODE_SESSION' ):
-            print 'Welcome %s!' % username
             self.loggedIn = True
+            print 'Welcome %s!' % username
+        else:
+            self.loggedIn = False
+
+    def parse_sessions( self, resp ):
+        sd = {}
+        for s in json.loads( resp.text ).get( 'sessions', [] ):
+            sid, name, active = s[ 'id' ], s[ 'name' ] or '#', s[ 'is_active' ]
+            sd[ name ] = Session( sid, name, active )
+        return sd
+
+    def get_sessions( self ):
+        url = self.url + '/session/'
+        headers = {
+                'referer' : url,
+                'content-type' : 'application/json',
+                'x-csrftoken' : self.session.cookies[ 'csrftoken' ],
+                'x-requested-with' : 'XMLHttpRequest',
+        }
+        resp = self.session.post( url, json={}, headers=headers )
+        return self.parse_sessions( resp )
+
+    def create_session( self, name ):
+        url = self.url + '/session/'
+        headers = {
+                'referer' : url,
+                'content-type' : 'application/json',
+                'x-csrftoken' : self.session.cookies[ 'csrftoken' ],
+                'x-requested-with' : 'XMLHttpRequest',
+        }
+        data = { 'func': 'create', 'name': name, }
+        resp = self.session.put( url, json=data, headers=headers )
+        return self.parse_sessions( resp )
+
+    def activate_session( self, sid ):
+        url = self.url + '/session/'
+        headers = {
+                'referer' : url,
+                'content-type' : 'application/json',
+                'x-csrftoken' : self.session.cookies[ 'csrftoken' ],
+                'x-requested-with' : 'XMLHttpRequest',
+        }
+        data = { 'func': 'activate', 'target': sid, }
+        resp = self.session.put( url, json=data, headers=headers )
+        return self.parse_sessions( resp )
 
     def get_tags( self ):
         url = self.url + '/problems/api/tags/'
@@ -289,7 +340,6 @@ class OJMixin( object ):
 
         p.loaded = bool( p.desc and p.test and p.code )
 
-    # @login_required
     def get_latest_solution( self, p ):
         url = self.url + '/submissions/latest/'
         referer = self.url + '/problems/%s/description/' % p.slug
@@ -312,7 +362,6 @@ class OJMixin( object ):
             code = p.code
         return code
 
-    # @login_required
     def get_solution( self, pid, token ):
         url = self.url + '/submissions/api/detail/%d/%s/%d/' % \
                 ( pid, self.lang, token )
@@ -323,7 +372,6 @@ class OJMixin( object ):
 
         return Solution( pid, token, code )
 
-    # @login_required
     def get_solutions( self, pid, sid, limit=5 ):
         url = self.url + '/submissions/detail/%s/' % sid
         js = r'var pageData =\s*(.*?);'
@@ -345,7 +393,6 @@ class OJMixin( object ):
 
         return solutions
 
-    # @login_required
     def get_solution_runtimes( self, sid ):
         url = self.url + '/submissions/detail/%s/' % sid
         js = r'var pageData =\s*(.*?);'
@@ -365,7 +412,6 @@ class OJMixin( object ):
 
         return runtimes
 
-    # @login_required
     def get_result( self, sid, timeout=30 ):
         url = self.url + '/submissions/detail/%s/check/' % sid
 
@@ -380,7 +426,6 @@ class OJMixin( object ):
 
         return Result( sid, data )
 
-    # @login_required
     def test_solution( self, p, code, tests='', full=False ):
         if full:
             epUrl, sidKey = 'submit/', 'submission_id'
@@ -413,8 +458,16 @@ class OJMixin( object ):
 
         return result
 
+def login_required( f ):
+    @functools.wraps( f )
+    def wrapper( *args, **kwargs ):
+        cs = args[ 0 ]
+        if cs.loggedIn:
+            return f( *args, **kwargs )
+    return wrapper
+
 class CodeShell( cmd.Cmd, OJMixin, Magic ):
-    ws = 'ws'
+    sessions, ws = {}, 'ws'
     topics, companies, problems, cheatsheet = {}, {}, {}, {}
     topic = pid = sid = None
     xlimit = 0
@@ -425,10 +478,6 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         if not os.path.exists( self.ws ):
             os.makedirs( self.ws )
 
-    @property
-    def prompt( self ):
-        return self.cwd() + '> '
-
     def precmd( self, line ):
         line = line.lower()
         if line.startswith( '/' ):
@@ -438,6 +487,28 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     def emptyline( self ):
         pass
 
+    @property
+    def prompt( self ):
+        return self.sname + ':' + self.cwd + '> '
+
+    def complete_all( self, keys, text, line, start, end ):
+        prefix, suffixes = ' '.join( line.split()[ 1: ] ), []
+
+        for t in sorted( keys ):
+            if t.startswith( prefix ):
+                i = len( prefix )
+                suffixes.append( t[ i: ] )
+
+        return [ text + s for s in suffixes ]
+
+    @property
+    def sname( self ):
+        for s in self.sessions.itervalues():
+            if s.active:
+                return s.name
+        return '~'
+
+    @property
     def cwd( self ):
         wd = '/'
         if self.topic:
@@ -452,6 +523,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             return '%s/%d.%s' % ( self.ws, self.pid, self.suffix )
         else:
             return None
+
     @property
     def tests( self ):
         return '%s/tests.dat' % self.ws
@@ -472,19 +544,6 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                         self.topics[ t ].remove( pid )
             map( lambda i: self.problems[ i ].topics.append( '#' ), pl )
             self.topics[ '#' ] = list( sorted( pl ) )
-
-    def limit( self, limit ):
-        self.xlimit = limit
-        if self.xlimit:
-            for pid in self.problems.keys():
-                if pid > self.xlimit:
-                    del self.problems[ pid ]
-
-            for t, pl in self.topics.iteritems():
-                self.topics[ t ] = list( filter( lambda i : i <= self.xlimit, pl ) )
-
-            for t, pl in self.companies.iteritems():
-                self.companies[ t ] = set( filter( lambda i : i <= self.xlimit, pl ) )
 
     @contextlib.contextmanager
     def count( self, pl ):
@@ -509,6 +568,19 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 print '   ', p
                 l = p.level
 
+    def limit( self, limit ):
+        self.xlimit = limit
+        if self.xlimit:
+            for pid in self.problems.keys():
+                if pid > self.xlimit:
+                    del self.problems[ pid ]
+
+            for t, pl in self.topics.iteritems():
+                self.topics[ t ] = list( filter( lambda i : i <= self.xlimit, pl ) )
+
+            for t, pl in self.companies.iteritems():
+                self.companies[ t ] = set( filter( lambda i : i <= self.xlimit, pl ) )
+
     def do_login( self, unused=None ):
         self.login()
         self.load( force=True )
@@ -516,18 +588,30 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         self.topic = self.pid = self.sid = None
         if self.loggedIn:
             print self.motd
+            self.sessions = self.get_sessions()
             self.do_top()
 
-    def complete_chmod( self, text, line, start, end ):
-        keys = self.langs
-        prefix, suffixes = ' '.join( line.split()[ 1: ] ), []
+    def complete_su( self, *args ):
+        return self.complete_all( self.sessions.keys(), *args )
 
-        for t in sorted( keys ):
-            if t.startswith( prefix ):
-                i = len( prefix )
-                suffixes.append( t[ i: ] )
+    @login_required
+    def do_su( self, name ):
+        if name not in self.sessions:
+            prompt = self.magic( "Create session? (y/N)" )
+            try:
+                c = raw_input( prompt ).lower() in [ 'y', 'yes']
+            except EOFError:
+                c = False
+            if c:
+                self.sessions = self.create_session( name )
 
-        return [ text + s for s in suffixes ]
+        s = self.sessions.get( name )
+        if s and not s.active:
+            self.sessions = self.activate_session( s.sid )
+            self.load( force=True )
+
+    def complete_chmod( self, *args ):
+        return self.complete_all( self.langs, *args )
 
     def do_chmod( self, lang ):
         if lang in self.langs and lang != self.lang:
@@ -572,19 +656,12 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             pl = list( filter( fn, self.problems.itervalues() ) )
             self.list( pl )
 
-    def complete_cd( self, text, line, start, end ):
+    def complete_cd( self, *args ):
         if self.topic:
             keys = [ str( i ) for i in self.topics[ self.topic ] ]
         else:
             keys = self.topics.keys()
-        prefix, suffixes = ' '.join( line.split()[ 1: ] ), []
-
-        for t in sorted( keys ):
-            if t.startswith( prefix ):
-                i = len( prefix )
-                suffixes.append( t[ i: ] )
-
-        return [ text + s for s in suffixes ]
+        return self.complete_all( keys, *args )
 
     def do_cd( self, arg ):
         if arg == '..':
@@ -641,6 +718,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     f.write( p.test )
         self.pid = xpid
 
+    @login_required
     def do_check( self, unused ):
         p = self.problems.get( self.pid )
         if p and os.path.isfile( self.pad ):
@@ -653,6 +731,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                         print 'Input: ', ', '.join( tests.splitlines() )
                         print result
 
+    @login_required
     def do_push( self, unused ):
         def histogram( t, times, limit=25 ):
             try:
@@ -687,6 +766,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                                 f.write( '\n' + result.input )
                     print result
 
+    @login_required
     def do_cheat( self, limit ):
         if self.pid and self.sid:
             cs = self.cheatsheet.get( self.pid )
@@ -746,6 +826,9 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         with self.count( self.problems.itervalues() ):
             pass
 
+    def do_clear( self, unused ):
+        os.system( 'clear' )
+
     def do_limit( self, limit ):
         if limit.isdigit():
             limit = int( limit )
@@ -754,9 +837,6 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             self.limit( limit )
         elif self.xlimit:
             print self.xlimit
-
-    def do_clear( self, unused ):
-        os.system( 'clear' )
 
     def do_eof( self, arg ):
         return True
