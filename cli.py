@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
-import cmd, contextlib, functools, getpass, json, os, pprint, random, re, sys, time
-import bs4, execjs, requests
+import cmd, contextlib, functools, getpass, os, pprint, random, re, sys, time
+import bs4, execjs, json, requests
+from datetime import datetime
 from lxml import html
 
 class Magic( object ):
@@ -115,6 +116,7 @@ class Result( object ):
 #       pprint.pprint( result )
         self.sid = sid
         self.success = False
+        self.fintime = None
 
         def split( s ):
             return s.splitlines() if type( s ) in [ str, unicode ] else s
@@ -157,7 +159,7 @@ class Result( object ):
             s += '\n'
 
         if self.result:
-            s += 'Result:'
+            s += 'Result: '
             s += ', '.join( self.result ) + '\n'
 
         if self.input:
@@ -179,8 +181,13 @@ class Result( object ):
             s += '\n'.join( self.debug[ : limit ] ) + '\n'
 
         if self.runtime:
-            s += 'Time: %d ms' % self.runtime
-        return s
+            s += 'Runtime: %d ms' % self.runtime + '\n'
+
+        if self.fintime:
+            m, sec = self.fintime / 60, self.fintime % 60
+            s += 'Finish Time: %d min %d sec' % ( m, sec ) + '\n'
+
+        return s.strip( '\n' )
 
 class Session( object ):
     def __init__( self, sid, name, active ):
@@ -330,13 +337,16 @@ class OJMixin( object ):
             p.html = e.prettify()
             break
 
-        for s in re.findall( js, resp.text, re.DOTALL ):
-            v = execjs.eval( s )
-            for cs in v.get( 'codeDefinition' ):
-                if cs.get( 'text' ) == self.language:
-                    p.code = self.strip( cs.get( 'defaultCode', '' ) )
-            p.test = v.get( 'sampleTestCase' )
-            break
+        if p.todo:
+            for s in re.findall( js, resp.text, re.DOTALL ):
+                v = execjs.eval( s )
+                for cs in v.get( 'codeDefinition' ):
+                    if cs.get( 'text' ) == self.language:
+                        p.code = self.strip( cs.get( 'defaultCode', '' ) )
+                p.test = v.get( 'sampleTestCase' )
+                break
+        else:
+            p.code = self.get_latest_solution( p )
 
         p.loaded = bool( p.desc and p.test and p.code )
 
@@ -359,7 +369,7 @@ class OJMixin( object ):
         try:
             code = self.strip( json.loads( resp.text ).get( 'code' ) )
         except ValueError:
-            code = p.code
+            code = ''
         return code
 
     def get_solution( self, pid, token ):
@@ -482,7 +492,13 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         line = line.lower()
         if line.startswith( '/' ):
             line = 'find ' + ' '.join( line.split( '/' ) )
+        self.xpid = self.pid
         return line
+
+    def postcmd( self, stop, line ):
+        if self.pid != self.xpid:
+            self.ts = datetime.now()
+        return stop
 
     def emptyline( self ):
         pass
@@ -708,15 +724,14 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     self.get_problem( p )
 
                 if writable( p ):
-                    code = self.get_latest_solution( p )
                     self.pid = pid
                     with open( self.pad, 'w' ) as f:
-                        f.write( code )
+                        f.write( p.code )
                     print self.pad
 
                 with open( self.tests, 'w' ) as f:
                     f.write( p.test )
-        self.pid = xpid
+        self.pid, self.ts = xpid, datetime.now()
 
     @login_required
     def do_check( self, unused ):
@@ -755,11 +770,12 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 code = f.read()
                 result = self.test_solution( p, code, full=True )
                 if result:
-                    self.sid = result.sid
-                    p.solved = result.success
-                    if result.success:
+                    self.sid, p.solved, xsolved = result.sid, result.success, p.solved
+                    if p.solved:
                         runtimes = self.get_solution_runtimes( result.sid )
                         histogram( result.runtime, runtimes )
+                        if not xsolved:
+                            result.fintime = ( datetime.now() - self.ts ).seconds
                     else:
                         with open( self.tests, 'a+' ) as f:
                             if f.read().find( result.input ) == -1:
@@ -814,6 +830,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     try:
                         print title( p ) + p.html
                         print '<p>[', ', '.join( p.topics ).title(), ']</p>'
+                        if p.solved:
+                            print '<pre>' + p.code + '</pre>'
                     except UnicodeEncodeError:
                         pass
                     done.add( pid )
