@@ -72,6 +72,7 @@ class Problem( object ):
         self.topics = topics[ : ]
         self.status = status
         self.desc = self.code = self.test = self.html = ''
+        self.record = History( slug )
 
     def __str__( self ):
         if self.solved:
@@ -99,14 +100,18 @@ class Problem( object ):
     def todo( self ):
         return not self.status
 
+    @property
+    def rate( self ):
+        return self.record.rate
+
 class Solution( object ):
-    def __init__( self, pid, sid, code ):
+    def __init__( self, pid, runtime, code ):
         self.pid = pid
-        self.sid = sid
+        self.runtime = runtime
         self.code = code
 
     def __str__( self ):
-        s = '[%d ms]\n' % self.sid
+        s = '[%d ms]\n' % self.runtime
         for i, l in enumerate( self.code.splitlines() ):
             s += '%3d %s\n' % ( i, l )
         return s
@@ -188,6 +193,28 @@ class Result( object ):
             s += 'Finish Time: %d min %d sec' % ( m, sec ) + '\n'
 
         return s.strip( '\n' )
+
+class History( object ):
+    def __init__( self, slug ):
+        self.slug = slug
+        self.submissions = []
+        self.passed = 0
+
+    @property
+    def total( self ):
+        return len( self.submissions )
+
+    @property
+    def rate( self ):
+        return float( self.passed ) / self.total if self.total else 1
+
+    def add( self, url, timestamp, status ):
+        if status == 'Accepted':
+            self.passed += 1
+        self.submissions.append( ( url, timestamp, status ) )
+
+    def __str__( self ):
+        return '%d/%d' % ( self.passed, self.total ) if self.total else '*'
 
 class Session( object ):
     def __init__( self, sid, name, active ):
@@ -307,7 +334,7 @@ class OJMixin( object ):
         return ( topics, companies )
 
     def get_problems( self ):
-        url = self.url + '/api/problems/all/'
+        url = self.url + '/api/problems/algorithms/'
 
         resp = self.session.get( url )
 
@@ -347,6 +374,7 @@ class OJMixin( object ):
                 break
         else:
             p.code = self.get_latest_solution( p )
+            p.record = self.get_history( p )
 
         p.loaded = bool( p.desc and p.test and p.code )
 
@@ -372,15 +400,15 @@ class OJMixin( object ):
             code = ''
         return code
 
-    def get_solution( self, pid, token ):
+    def get_solution( self, pid, runtime ):
         url = self.url + '/submissions/api/detail/%d/%s/%d/' % \
-                ( pid, self.lang, token )
+                ( pid, self.lang, runtime )
 
         resp = self.session.get( url )
         data = json.loads( resp.text )
         code = data.get( 'code' )
 
-        return Solution( pid, token, code )
+        return Solution( pid, runtime, code )
 
     def get_solutions( self, pid, sid, limit=5 ):
         url = self.url + '/submissions/detail/%s/' % sid
@@ -395,8 +423,8 @@ class OJMixin( object ):
                 df = json.loads( v.get( 'distribution_formatted' ) )
                 if df.get( 'lang' ) == self.lang:
                     for e in df.get( 'distribution' )[ : limit ]:
-                        token = int( e[ 0 ] )
-                        solutions.append( self.get_solution( pid, token ) )
+                        t = int( e[ 0 ] )
+                        solutions.append( self.get_solution( pid, t ) )
                     break
             except ValueError:
                 pass
@@ -421,20 +449,6 @@ class OJMixin( object ):
                 pass
 
         return runtimes
-
-    def get_result( self, sid, timeout=30 ):
-        url = self.url + '/submissions/detail/%s/check/' % sid
-
-        for i in xrange( timeout ):
-            time.sleep( 1 )
-            resp = self.session.get( url )
-            data = json.loads( resp.text )
-            if data.get( 'state' ) == 'SUCCESS':
-                break
-        else:
-            data = { 'error': '< network timeout >' }
-
-        return Result( sid, data )
 
     def test_solution( self, p, code, tests='', full=False ):
         if full:
@@ -467,6 +481,82 @@ class OJMixin( object ):
             result = None
 
         return result
+
+    def get_result( self, sid, timeout=30 ):
+        url = self.url + '/submissions/detail/%s/check/' % sid
+
+        for i in xrange( timeout ):
+            time.sleep( 1 )
+            resp = self.session.get( url )
+            data = json.loads( resp.text )
+            if data.get( 'state' ) == 'SUCCESS':
+                break
+        else:
+            data = { 'error': '< network timeout >' }
+
+        return Result( sid, data )
+
+    def get_history( self, p ):
+        url = self.url + '/api/submissions/%s/' % p.slug
+
+        resp = self.session.get( url )
+
+        r = History( p.slug )
+        for e in json.loads( resp.text ).get( 'submissions_dump' ):
+            u = e.get( 'url' )
+            t = e.get( 'time' )
+            s = e.get( 'status_display' )
+            r.add( url=u, timestamp=t, status=s )
+
+        return r
+
+class Html( object ):
+    def __init__( self, p ):
+        self.p = p
+
+    @staticmethod
+    def header():
+        with open( 'header.html', 'r' ) as f:
+            s = f.read()
+        return s + '<body><div class="container">'
+
+    @staticmethod
+    def tail():
+        return '</div></body>'
+
+    @property
+    def title( self ):
+        p = self.p
+        s = '<h4>' + str( p.pid ) + ' '+ p.slug.replace( '-', ' ' ).title() + '</h4>'
+        if p.todo:
+            s = '<div class="bg-primary text-white">' + s + '</div>'
+        elif p.failed or p.rate < 0.34:
+            s = '<div class="bg-danger text-white">' + s + '</div>'
+        else:
+            s = '<div>' + s + '</div>'
+        return s
+
+    @property
+    def tags( self ):
+        p = self.p
+        l = list ( filter( lambda x: x != '#', p.topics ) )
+        if p.solved:
+            l.append( str( p.record ) )
+        elif not l:
+            return ''
+        return '<div><mark>' + ', '.join( l ).title() +  '</mark></div>'
+
+    @property
+    def desc( self ):
+        return self.p.html
+
+    @property
+    def code( self ):
+        p = self.p
+        return '<pre><code>' + p.code + '</code></pre>' if p.solved else ''
+
+    def __str__( self ):
+        return ''.join( [ self.title, self.tags, self.desc, self.code ] )
 
 def login_required( f ):
     @functools.wraps( f )
@@ -550,16 +640,21 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         if not self.problems or force:
             self.problems = self.get_problems()
             pl = set( self.problems.iterkeys() )
-            for t in sorted( self.topics.iterkeys() ):
-                for pid in self.topics[ t ]:
+
+            for t, tpl in self.topics.iteritems():
+                for pid in tpl[ : ]:
                     p = self.problems.get( pid )
                     if p:
                         p.topics.append( t )
                         pl.discard( pid )
                     else:
-                        self.topics[ t ].remove( pid )
-            map( lambda i: self.problems[ i ].topics.append( '#' ), pl )
+                        tpl.remove( pid )
+
             self.topics[ '#' ] = list( sorted( pl ) )
+            map( lambda i: self.problems[ i ].topics.append( '#' ), pl )
+
+            for c, cpl in self.companies.iteritems():
+                cpl -= set( filter( lambda i : i not in self.problems, cpl ) )
 
     @contextlib.contextmanager
     def count( self, pl ):
@@ -657,11 +752,12 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             p = self.problems[ self.pid ]
             if not p.loaded:
                 self.get_problem( p )
-            print '[', ', '.join( p.topics ).title(), ']'
             try:
+                topics = ', '.join( p.topics ).title()
+                print '[%s] [%s]' % ( topics, str( p.record ) )
                 print p.desc
-            except UnicodeEncodeError:
-                print '\n...\n'
+            except UnicodeEncodeError, e:
+                pass
 
     def do_find( self, key ):
         if key:
@@ -794,51 +890,50 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             for i in xrange( limit ):
                 try:
                     print cs[ i ]
-                except UnicodeEncodeError:
-                    print '< non-printable >'
+                except UnicodeEncodeError, e:
+                    pass
 
     def do_print( self, key ):
-        def order( i, j ):
-            a = ( -self.problems[ i ].level, i )
-            b = ( -self.problems[ j ].level, j )
+        def filter( key ):
+            if key in self.topics:
+                topics = { key: self.topics[ key ] }
+            elif key in self.companies:
+                topics = { key: self.companies[ key ] }
+            else:
+                topics = self.topics
+            return topics
+
+        def load( pids, x ):
+            pl = []
+            for i in pids:
+                p = self.problems[ i ]
+                if not p.loaded:
+                    self.get_problem( p )
+                    x += 1
+                    sys.stdout.write( '\r%d' % x )
+                    sys.stdout.flush()
+                pl.append( p )
+            return pl
+
+        def order( p, q ):
+            a = ( -p.level, p.rate, p.pid )
+            b = ( -q.level, q.rate, q.pid )
             return 1 if a > b else -1 if a < b else 0
 
-        def title( p ):
-            s = str( p.pid ) + ' ' + p.slug.replace( '-', ' ' ).title()
-            if p.todo:
-                s = '<font color="blue">' + s + '</font>'
-            elif p.failed:
-                s = '<font color="red">' + s + '</font>'
-            return '<h3>%s</h3>' % s
+        topics, printed = filter( key ), set()
 
-        if key in self.topics:
-            topics = { key: self.topics[ key ] }
-        elif key in self.companies:
-            topics = { key: self.companies[ key ] }
-        else:
-            topics, key = self.topics, 'all'
-        done = set()
-
-        xout, sys.stdout = sys.stdout, open( self.ws + '/%s.html' % key, 'w' )
-        for t in sorted( topics ):
-            print '<h2>' + t.title() + '</h2>'
-            for pid in sorted( topics.get( t, [] ), order ):
-                if pid not in done:
-                    p = self.problems[ pid ]
-                    if not p.loaded:
-                        self.get_problem( p )
-                    try:
-                        print title( p ) + p.html
-                        print '<p>[', ', '.join( p.topics ).title(), ']</p>'
-                        if p.solved:
-                            print '<pre>' + p.code + '</pre>'
-                    except UnicodeEncodeError:
-                        pass
-                    done.add( pid )
-                    xout.write( '\r%d' % len( done ) )
-                    xout.flush()
-        sys.stdout.close()
-        sys.stdout = xout
+        with open( self.ws + '/%s.html' % ( key or 'all' ), 'w' ) as f:
+            f.write( Html.header() )
+            for t, pids in sorted( topics.iteritems() ):
+                pl = load( pids, len( printed ) )
+                for p in sorted( pl, order ):
+                    if p.pid not in printed:
+                        try:
+                            f.write( str( Html( p ) ) )
+                        except UnicodeEncodeError, e:
+                            pass
+                        printed.add( p.pid )
+            f.write( Html.tail() )
 
     def do_top( self, unused=None ):
         with self.count( self.problems.itervalues() ):
