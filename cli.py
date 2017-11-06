@@ -64,13 +64,14 @@ ___|_|____
         return """,___,\n[O.o]  %s\n/)__)\n-"--"-""" % msg
 
 class Problem( object ):
-    def __init__( self, pid, slug, level, topics=[], status=None ):
+    def __init__( self, pid, slug, rate, freq, status=None ):
         self.loaded = False
         self.pid = pid
         self.slug = slug
-        self.level = level
-        self.topics = topics[ : ]
+        self.rate = rate
+        self.freq = freq
         self.status = status
+        self.topics = []
         self.desc = self.code = self.test = self.html = ''
         self.record = History( slug )
 
@@ -99,10 +100,6 @@ class Problem( object ):
     @property
     def todo( self ):
         return not self.status
-
-    @property
-    def rate( self ):
-        return self.record.rate
 
 class Solution( object ):
     def __init__( self, pid, runtime, code ):
@@ -204,17 +201,13 @@ class History( object ):
     def total( self ):
         return len( self.submissions )
 
-    @property
-    def rate( self ):
-        return float( self.passed ) / self.total if self.total else 1
-
     def add( self, url, timestamp, status ):
         if status == 'Accepted':
             self.passed += 1
         self.submissions.append( ( url, timestamp, status ) )
 
     def __str__( self ):
-        return '%d/%d' % ( self.passed, self.total ) if self.total else '*'
+        return '%d/%d' % ( self.passed, self.total ) if self.total else ''
 
 class Session( object ):
     def __init__( self, sid, name, active ):
@@ -342,9 +335,12 @@ class OJMixin( object ):
         for e in json.loads( resp.text ).get( 'stat_status_pairs' ):
             i = e.get( 'stat' ).get( 'question_id' )
             s = e.get( 'stat' ).get( 'question__title_slug' )
-            l = e.get( 'difficulty' ).get( 'level' )
+            a = e.get( 'stat' ).get( 'total_acs' )
+            n = e.get( 'stat' ).get( 'total_submitted' )
+            f = e.get( 'frequency' )
             t = e.get( 'status' )
-            problems[ i ] = Problem( pid=i, slug=s, level=l, status=t )
+            ar = float( a ) / n
+            problems[ i ] = Problem( pid=i, slug=s, rate=ar, freq=f, status=t )
 
         return problems
 
@@ -672,29 +668,37 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
     def list( self, pl ):
         with self.count( pl ):
-            l = 0
-            for p in sorted( pl, key=lambda p: ( -p.level, p.pid ) ):
-                if p.level < l:
+            r = [ 1, 0.45, 0.3 ]
+            for p in sorted( pl, key=lambda p: ( p.rate, p.pid ) ):
+                if p.rate > r[ -1 ]:
                     print ''
+                    r.pop()
                 print '   ', p
-                l = p.level
 
     def top( self ):
         with self.count( self.problems.itervalues() ):
             pass
 
     def limit( self, limit ):
+        def order( i, j ):
+            p, q = self.problems[ i ], self.problems[ j ]
+            return -int( p.freq - q.freq )
+
+        def update( pd ):
+            for k in pd.keys():
+                pl = list( filter( lambda i: i not in ps, pd[ k ] ) )
+                if pl:
+                    pd[ k ] = pl
+                else:
+                    del pd[ k ]
+
         self.xlimit = limit
         if self.xlimit:
-            for pid in self.problems.keys():
-                if pid > self.xlimit:
-                    del self.problems[ pid ]
-
-            for t, pl in self.topics.iteritems():
-                self.topics[ t ] = list( filter( lambda i : i <= self.xlimit, pl ) )
-
-            for t, pl in self.companies.iteritems():
-                self.companies[ t ] = set( filter( lambda i : i <= self.xlimit, pl ) )
+            ps = set( sorted( self.problems, order )[ limit : ] )
+            for pid in ps:
+                del self.problems[ pid ]
+            for pd in [ self.topics, self.companies ]:
+                update( pd )
 
     def do_login( self, unused=None ):
         self.login()
@@ -914,8 +918,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             return pl
 
         def order( p, q ):
-            a = ( -p.level, p.rate, p.pid )
-            b = ( -q.level, q.rate, q.pid )
+            a = ( p.rate, p.pid )
+            b = ( q.rate, q.pid )
             return 1 if a > b else -1 if a < b else 0
 
         topics, printed = filter( key ), set()
@@ -936,7 +940,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     def do_limit( self, limit ):
         if limit.isdigit():
             limit = int( limit )
-            if limit > self.xlimit > 0 or limit == 0 < self.xlimit:
+            if limit > self.xlimit > 0 or self.xlimit > limit == 0:
                 self.load( force=True )
             self.limit( limit )
         elif self.xlimit:
