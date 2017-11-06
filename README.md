@@ -43,8 +43,6 @@ clear
 
 limit < number of problems >
 
-top
-
 print
 ```
 Control+D to exit

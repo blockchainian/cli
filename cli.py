@@ -679,6 +679,10 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 print '   ', p
                 l = p.level
 
+    def top( self ):
+        with self.count( self.problems.itervalues() ):
+            pass
+
     def limit( self, limit ):
         self.xlimit = limit
         if self.xlimit:
@@ -700,7 +704,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         if self.loggedIn:
             print self.motd
             self.sessions = self.get_sessions()
-            self.do_top()
+            self.top()
 
     def complete_su( self, *args ):
         return self.complete_all( self.sessions.keys(), *args )
@@ -743,7 +747,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     if not self.problems[ pid ].solved:
                         todo += 1
                 print '   ', '%3d' % todo, t
-            self.do_top()
+            self.top()
 
         elif not self.pid:
             pl = [ self.problems[ i ] for i in self.topics.get( self.topic ) ]
@@ -925,10 +929,6 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                         f.write( str( Html( p ) ) )
                         printed.add( p.pid )
             f.write( Html.tail() )
-
-    def do_top( self, unused=None ):
-        with self.count( self.problems.itervalues() ):
-            pass
 
     def do_clear( self, unused ):
         os.system( 'clear' )
