@@ -364,15 +364,15 @@ class OJMixin( object ):
             p.html = e.prettify()
             break
 
-        if p.todo:
-            for s in re.findall( js, resp.text, re.DOTALL ):
-                v = execjs.eval( s )
-                for cs in v.get( 'codeDefinition' ):
-                    if cs.get( 'text' ) == self.language:
-                        p.code = self.strip( cs.get( 'defaultCode', '' ) )
-                p.test = v.get( 'sampleTestCase' )
-                break
-        else:
+        for s in re.findall( js, resp.text, re.DOTALL ):
+            v = execjs.eval( s )
+            for cs in v.get( 'codeDefinition' ):
+                if cs.get( 'text' ) == self.language:
+                    p.code = self.strip( cs.get( 'defaultCode', '' ) )
+            p.test = v.get( 'sampleTestCase' )
+            break
+
+        if not p.todo:
             p.code = self.get_latest_solution( p )
             p.record = self.get_history( p )
 
@@ -945,7 +945,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     def do_limit( self, limit ):
         if limit.isdigit():
             limit = int( limit )
-            if limit > self.xlimit:
+            if limit > self.xlimit > 0 or limit == 0 < self.xlimit:
                 self.load( force=True )
             self.limit( limit )
         elif self.xlimit:
