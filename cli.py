@@ -349,7 +349,7 @@ class OJMixin( object ):
         return problems
 
     def strip( self, s ):
-        return s.replace( '\r', '' )
+        return s.replace( '\r', '' ).encode( 'ascii', 'ignore' )
 
     def get_problem( self, p ):
         url = self.url + '/problems/%s/description/' % p.slug
@@ -361,7 +361,7 @@ class OJMixin( object ):
         soup = bs4.BeautifulSoup( resp.text, 'lxml' )
         for e in soup.find_all( 'div', attrs=cls ):
             p.desc = self.strip( e.text )
-            p.html = e.prettify()
+            p.html = self.strip( e.prettify() )
             break
 
         for s in re.findall( js, resp.text, re.DOTALL ):
@@ -752,12 +752,9 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             p = self.problems[ self.pid ]
             if not p.loaded:
                 self.get_problem( p )
-            try:
-                topics = ', '.join( p.topics ).title()
-                print '[%s] [%s]' % ( topics, str( p.record ) )
-                print p.desc
-            except UnicodeEncodeError, e:
-                pass
+            topics = ', '.join( p.topics ).title()
+            print '[%s] [%s]' % ( topics, str( p.record ) )
+            print p.desc
 
     def do_find( self, key ):
         if key:
@@ -888,10 +885,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
             limit = min( len( cs ), max( int( limit ), 1 ) if limit else 1 )
             for i in xrange( limit ):
-                try:
-                    print cs[ i ]
-                except UnicodeEncodeError, e:
-                    pass
+                print cs[ i ]
 
     def do_print( self, key ):
         def filter( key ):
@@ -928,10 +922,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 pl = load( pids, len( printed ) )
                 for p in sorted( pl, order ):
                     if p.pid not in printed:
-                        try:
-                            f.write( str( Html( p ) ) )
-                        except UnicodeEncodeError, e:
-                            pass
+                        f.write( str( Html( p ) ) )
                         printed.add( p.pid )
             f.write( Html.tail() )
 
