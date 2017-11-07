@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import cmd, contextlib, functools, getpass, os, pprint, random, re, sys, time
-import bs4, execjs, json, requests
+import bs4, difflib, execjs, json, requests
 from datetime import datetime
 from lxml import html
 
@@ -101,6 +101,13 @@ class Problem( object ):
     def todo( self ):
         return not self.status
 
+    @property
+    def tags( self ):
+        l = filter( lambda x: x != '#', self.topics )
+        if not self.todo:
+            l.append( str( self.record ) )
+        return ', '.join( l ).title()
+
 class Solution( object ):
     def __init__( self, pid, runtime, code ):
         self.pid = pid
@@ -198,13 +205,17 @@ class History( object ):
         self.passed = 0
 
     @property
+    def sid( self ):
+        return self.submissions[ -1 ][ 0 ]
+
+    @property
     def total( self ):
         return len( self.submissions )
 
-    def add( self, url, timestamp, status ):
+    def add( self, sid, lang, status, timestamp='Now' ):
         if status == 'Accepted':
             self.passed += 1
-        self.submissions.append( ( url, timestamp, status ) )
+        self.submissions.append( ( sid, lang, status, timestamp ) )
 
     def __str__( self ):
         return '%d/%d' % ( self.passed, self.total ) if self.total else ''
@@ -406,13 +417,20 @@ class OJMixin( object ):
 
         return Solution( pid, runtime, code )
 
-    def get_solutions( self, pid, sid, limit=5 ):
+    def get_solutions( self, pid, sid, limit=10 ):
         url = self.url + '/submissions/detail/%s/' % sid
         js = r'var pageData =\s*(.*?);'
 
         resp = self.session.get( url )
-        solutions = []
 
+        def diff( a, sl ):
+            for b in sl:
+                r = difflib.SequenceMatcher( a=a.code, b=b.code ).ratio()
+                if r >= 0.9:
+                    return False
+            return True
+
+        solutions = []
         for s in re.findall( js, resp.text, re.DOTALL ):
             v = execjs.eval( s )
             try:
@@ -420,7 +438,9 @@ class OJMixin( object ):
                 if df.get( 'lang' ) == self.lang:
                     for e in df.get( 'distribution' )[ : limit ]:
                         t = int( e[ 0 ] )
-                        solutions.append( self.get_solution( pid, t ) )
+                        sln = self.get_solution( pid, t )
+                        if diff( sln, solutions ):
+                            solutions.append( sln )
                     break
             except ValueError:
                 pass
@@ -499,10 +519,11 @@ class OJMixin( object ):
 
         r = History( p.slug )
         for e in json.loads( resp.text ).get( 'submissions_dump' ):
-            u = e.get( 'url' )
-            t = e.get( 'time' )
+            sid = e.get( 'url' ).split( '/' )[ 3 ]
+            lang = e.get( 'lang' )
             s = e.get( 'status_display' )
-            r.add( url=u, timestamp=t, status=s )
+            t = e.get( 'time' )
+            r.add( sid=sid, lang=lang, status=s, timestamp=t )
 
         return r
 
@@ -535,12 +556,7 @@ class Html( object ):
     @property
     def tags( self ):
         p = self.p
-        l = list ( filter( lambda x: x != '#', p.topics ) )
-        if p.solved:
-            l.append( str( p.record ) )
-        elif not l:
-            return ''
-        return '<div><mark>' + ', '.join( l ).title() +  '</mark></div>'
+        return '<div><mark>' + p.tags + '</mark></div>' if p.tags else ''
 
     @property
     def desc( self ):
@@ -565,7 +581,7 @@ def login_required( f ):
 class CodeShell( cmd.Cmd, OJMixin, Magic ):
     sessions, ws = {}, 'ws'
     topics, companies, problems, cheatsheet = {}, {}, {}, {}
-    topic = pid = sid = None
+    topic = pid = None
     xlimit = 0
 
     def __init__( self ):
@@ -686,7 +702,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
         def update( pd ):
             for k in pd.keys():
-                pl = list( filter( lambda i: i not in ps, pd[ k ] ) )
+                pl = filter( lambda i: i not in ps, pd[ k ] )
                 if pl:
                     pd[ k ] = pl
                 else:
@@ -704,7 +720,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         self.login()
         self.load( force=True )
         self.limit( self.xlimit )
-        self.topic = self.pid = self.sid = None
+        self.topic = self.pid = None
         if self.loggedIn:
             print self.motd
             self.sessions = self.get_sessions()
@@ -728,6 +744,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         if s and not s.active:
             self.sessions = self.activate_session( s.sid )
             self.load( force=True )
+            self.limit( self.xlimit )
 
     def complete_chmod( self, *args ):
         return self.complete_all( self.langs, *args )
@@ -738,7 +755,6 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             for p in self.problems.itervalues():
                 p.code = ''
             self.cheatsheet.clear()
-            self.sid = None
         else:
             print self.lang
 
@@ -760,8 +776,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             p = self.problems[ self.pid ]
             if not p.loaded:
                 self.get_problem( p )
-            topics = ', '.join( p.topics ).title()
-            print '[%s] [%s]' % ( topics, str( p.record ) )
+            if p.tags:
+                print '[%s]' % p.tags
             print p.desc
 
     def do_find( self, key ):
@@ -770,7 +786,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 fn = lambda p: p.pid in self.companies[ key ]
             else:
                 fn = lambda p: p.slug.find( key ) != -1
-            pl = list( filter( fn, self.problems.itervalues() ) )
+            pl = filter( fn, self.problems.itervalues() )
             self.list( pl )
 
     def complete_cd( self, *args ):
@@ -871,32 +887,41 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 code = f.read()
                 result = self.test_solution( p, code, full=True )
                 if result:
-                    self.sid, p.solved, xsolved = result.sid, result.success, p.solved
+                    p.solved, xsolved = result.success, p.solved
                     if p.solved:
                         runtimes = self.get_solution_runtimes( result.sid )
                         histogram( result.runtime, runtimes )
                         if not xsolved:
                             result.fintime = ( datetime.now() - self.ts ).seconds
+                        status = 'Accepted'
                     else:
                         with open( self.tests, 'a+' ) as f:
                             if f.read().find( result.input ) == -1:
                                 f.write( '\n' + result.input )
+                        status = 'Wrong Answer'
+                    p.record.add( sid=result.sid, lang=self.lang, status=status )
                     print result
 
     @login_required
     def do_cheat( self, limit ):
-        if self.pid and self.sid:
-            cs = self.cheatsheet.get( self.pid )
+        p = self.problems.get( self.pid )
+        if p:
+            cs = self.cheatsheet.get( p.pid )
             if not cs:
-                cs = self.get_solutions( self.pid, self.sid )
-                self.cheatsheet[ self.pid ] = cs
+                cs = self.get_solutions( p.pid, p.record.sid )
+                self.cheatsheet[ p.pid ] = cs
 
             limit = min( len( cs ), max( int( limit ), 1 ) if limit else 1 )
             for i in xrange( limit ):
                 print cs[ i ]
 
     def do_print( self, key ):
-        def filter( key ):
+        def order( p, q ):
+            a = ( p.rate, p.pid )
+            b = ( q.rate, q.pid )
+            return 1 if a > b else -1 if a < b else 0
+
+        def find( key ):
             if key in self.topics:
                 topics = { key: self.topics[ key ] }
             elif key in self.companies:
@@ -917,14 +942,14 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 pl.append( p )
             return pl
 
-        def order( p, q ):
-            a = ( p.rate, p.pid )
-            b = ( q.rate, q.pid )
-            return 1 if a > b else -1 if a < b else 0
+        def fname( key ):
+            l = [ self.sname, str( self.xlimit), key ]
+            l = filter( lambda w: w and w not in ( '0', '#' ), l )
+            return '-'.join( l ) or 'all'
 
-        topics, printed = filter( key ), set()
+        topics, printed = find( key ), set()
 
-        with open( self.ws + '/%s.html' % ( key or 'all' ), 'w' ) as f:
+        with open( self.ws + '/%s.html' % fname( key ), 'w' ) as f:
             f.write( Html.header() )
             for t, pids in sorted( topics.iteritems() ):
                 pl = load( pids, len( printed ) )
