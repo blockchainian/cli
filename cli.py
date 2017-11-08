@@ -3,7 +3,6 @@
 import cmd, contextlib, functools, getpass, os, pprint, random, re, sys, time
 import bs4, difflib, execjs, json, requests
 from datetime import datetime
-from lxml import html
 
 class Magic( object ):
     bunnies = [
@@ -206,7 +205,9 @@ class History( object ):
 
     @property
     def sid( self ):
-        return self.submissions[ -1 ][ 0 ]
+        for e in reversed( self.submissions ):
+            return e[ 0 ]
+        return None
 
     @property
     def total( self ):
@@ -253,13 +254,17 @@ class OJMixin( object ):
 
     def login( self ):
         url = self.url + '/accounts/login/'
-        xpath = "/html/body/div[1]/div[2]/form/input[@name='csrfmiddlewaretoken']/@value"
+        name = { 'name' : 'csrfmiddlewaretoken' }
         username = raw_input( 'Username: ' )
         password = getpass.getpass()
 
         self.session.cookies.clear()
         resp = self.session.get( url )
-        csrf = list( set( html.fromstring( resp.text ).xpath( xpath ) ) )[ 0 ]
+
+        soup = bs4.BeautifulSoup( resp.text, 'html.parser' )
+        for e in soup.find_all( 'input', attrs=name ):
+            csrf = e[ 'value' ]
+            break
 
         headers = { 'referer' : url }
         data = {
@@ -365,7 +370,7 @@ class OJMixin( object ):
 
         resp = self.session.get( url )
 
-        soup = bs4.BeautifulSoup( resp.text, 'lxml' )
+        soup = bs4.BeautifulSoup( resp.text, 'html.parser' )
         for e in soup.find_all( 'div', attrs=cls ):
             p.desc = self.strip( e.text )
             p.html = self.strip( e.prettify() )
@@ -906,14 +911,15 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     def do_cheat( self, limit ):
         p = self.problems.get( self.pid )
         if p:
-            cs = self.cheatsheet.get( p.pid )
-            if not cs:
-                cs = self.get_solutions( p.pid, p.record.sid )
+            sid = p.record.sid
+            cs = self.cheatsheet.get( p.pid, [] )
+            if not cs and sid:
+                cs = self.get_solutions( p.pid, sid )
                 self.cheatsheet[ p.pid ] = cs
 
-            limit = min( len( cs ), max( int( limit ), 1 ) if limit else 1 )
-            for i in xrange( limit ):
-                print cs[ i ]
+            limit = 1 if not limit else int( limit )
+            for c in cs[ : limit ]:
+                print c
 
     def do_print( self, key ):
         def order( p, q ):

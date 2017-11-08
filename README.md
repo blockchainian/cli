@@ -8,7 +8,7 @@ This tool is not affiliated with leetcode.com.
 
 ```sudo apt install nodejs```
 
-```sudo pip install requests lxml bs4 PyExecJS ascii_graph```
+```sudo pip install requests bs4 PyExecJS ascii_graph```
 
 On Mac OS:
 
