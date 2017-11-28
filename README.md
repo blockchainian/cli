@@ -23,7 +23,7 @@ Please let me know if this works. Sorry I don't have a Macbook:)
 ```
 login
 
-su <session>
+su < session >
 
 chmod < language >
 
@@ -47,10 +47,14 @@ clear
 
 limit < number of problems >
 
-print
+print < keyword >
 ```
 Control+D to exit
 
 ## Screencast
 
 <a href="https://asciinema.org/a/GSDeq9orT1hNChL0T9AenbJin"><img src="https://asciinema.org/a/GSDeq9orT1hNChL0T9AenbJin.png" width="1024"/></a>
+
+## Example HTML Report
+
+http://spiderman.ly/facebook.html
