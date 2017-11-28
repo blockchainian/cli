@@ -6,14 +6,18 @@ This tool is not affiliated with leetcode.com.
 
 ## Requirements
 
+Linux:
+
 ```sudo apt install nodejs```
 
 ```sudo pip install requests bs4 PyExecJS ascii_graph```
 
-On Mac OS:
+MacOS:
 
-```easy_install requests[security]```
+```easy_install requests[security] bs4 PyExecJS ascii_graph```
 
+Please let me know if this works. Sorry I don't have a Macbook:)
+ 
 ## Commands
 
 ```
@@ -46,3 +50,7 @@ limit < number of problems >
 print
 ```
 Control+D to exit
+
+## Screencast
+
+<a href="https://asciinema.org/a/GSDeq9orT1hNChL0T9AenbJin"><img src="https://asciinema.org/a/GSDeq9orT1hNChL0T9AenbJin.png" width="1024"/></a>
