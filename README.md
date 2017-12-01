@@ -15,7 +15,9 @@ Linux:
 MacOS:
 
 ```brew install openssl```
+
 ```env LDFLAGS="-L$(brew --prefix openssl)/lib" CFLAGS="-I$(brew --prefix openssl)/include" pip install cryptography```
+
 ```sudo easy_install requests[security] bs4 PyExecJS ascii_graph```
 
 Please let me know if this works. Sorry I don't have a Macbook:)
