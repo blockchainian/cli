@@ -5,6 +5,8 @@ import bs4, difflib, execjs, json, requests
 from datetime import datetime
 
 class Magic( object ):
+    """ ASCII art for Message of the Day and prompt """
+
     bunnies = [
 """
   (\(\\
@@ -42,16 +44,6 @@ c(")(")""",
 (\__/)  ||
 (>'.'<) ||
 (")_(") //""",
-
-"""
-   __//
-  /.__.\  oops
-  \ \/ /
-__/    \\
-\-      )
- \_____/
-___|_|____
-   " " """,
     ]
     def __init__( self ):
         self.motd = random.choice( self.bunnies )[ 1: ]
@@ -63,6 +55,16 @@ ___|_|____
         return """,___,\n[O.o]  %s\n/)__)\n-"--"-""" % msg
 
 class Problem( object ):
+    """
+    The abstract class of coding question.
+
+    Each question has:
+        description, problem ID, slug
+        topics - eg. array, tree, greedy, etc.
+        rate, frequency -- acceptance rate and frequency in interviews
+        status, record -- submission status and history
+    """
+
     def __init__( self, pid, slug, rate, freq, status=None ):
         self.loaded = False
         self.pid = pid
@@ -108,6 +110,12 @@ class Problem( object ):
         return ', '.join( l ).title()
 
 class Solution( object ):
+    """
+    The abstract class of solution.
+
+    Each solution has runtime and code.
+    """
+
     def __init__( self, pid, runtime, code ):
         self.pid = pid
         self.runtime = runtime
@@ -120,6 +128,14 @@ class Solution( object ):
         return s
 
 class Result( object ):
+    """
+    The renderer for test result.
+
+    It turns JSON output into human-friendly text.
+
+    XXX: this should be in the OJ mixin class.
+    """
+
     def __init__( self, sid, result ):
 #       pprint.pprint( result )
         self.sid = sid
@@ -198,6 +214,13 @@ class Result( object ):
         return s.strip( '\n' )
 
 class History( object ):
+    """
+    The submission history is list of sumbmission records.
+
+    Each submssion has:
+        submission ID, language, status and timestamp.
+    """
+
     def __init__( self, slug ):
         self.slug = slug
         self.submissions = []
@@ -222,6 +245,15 @@ class History( object ):
         return '%d/%d' % ( self.passed, self.total ) if self.total else ''
 
 class Session( object ):
+    """
+    A coding session is a workspace on an OJ.
+
+    Users can have multiple sessions on an OJ.
+    For example: 1st-round, 2nd-round, facebook, google, etc.
+
+    This allows users to better keep track of their progress.
+    """
+
     def __init__( self, sid, name, active ):
         self.sid = sid
         self.name = name if name else '#'
@@ -231,6 +263,14 @@ class Session( object ):
         return '*' if self.active else '' + self.name
 
 class OJMixin( object ):
+    """
+    Online Judge REST API
+
+    This is the wrapper class for the REST API of a OJ.
+
+    Any new OJ mixin should provide same interfaces.
+    """
+
     url = 'https://leetcode.com'
     langs = [ 'c', 'cpp', 'golang', 'java', 'javascript', 'python', 'scala' ]
     lang = 'python'
@@ -533,6 +573,12 @@ class OJMixin( object ):
         return r
 
 class Html( object ):
+    """
+    HTML renderer of a problem.
+
+    This renderer turns a problem and solutions into HTML.
+    """
+
     def __init__( self, p ):
         self.p = p
 
@@ -584,6 +630,10 @@ def login_required( f ):
     return wrapper
 
 class CodeShell( cmd.Cmd, OJMixin, Magic ):
+    """
+        The OJ CLI
+    """
+
     sessions, ws = {}, 'ws'
     topics, companies, problems, cheatsheet = {}, {}, {}, {}
     topic = pid = None
