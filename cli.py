@@ -129,9 +129,7 @@ class Solution( object ):
 
 class Result( object ):
     """
-    The renderer for test result.
-
-    It turns JSON output into human-friendly text.
+    The renderer for test result turns JSON output into human-friendly text.
 
     XXX: this should be in the OJ mixin class.
     """
@@ -215,10 +213,7 @@ class Result( object ):
 
 class History( object ):
     """
-    The submission history is list of sumbmission records.
-
-    Each submssion has:
-        submission ID, language, status and timestamp.
+    The submission history
     """
 
     def __init__( self, slug ):
@@ -267,8 +262,6 @@ class OJMixin( object ):
     Online Judge REST API
 
     This is the wrapper class for the REST API of a OJ.
-
-    Any new OJ mixin should provide same interfaces.
     """
 
     url = 'https://leetcode.com'
@@ -383,7 +376,9 @@ class OJMixin( object ):
         return ( topics, companies )
 
     def get_problems( self ):
-        url = self.url + '/api/problems/algorithms/'
+#       ps = 'algorithms/'
+        ps = 'favorite_lists/top-interview-questions/'
+        url = self.url + '/api/problems/' + ps
 
         resp = self.session.get( url )
 
@@ -563,20 +558,21 @@ class OJMixin( object ):
         resp = self.session.get( url )
 
         r = History( p.slug )
-        for e in json.loads( resp.text ).get( 'submissions_dump' ):
-            sid = e.get( 'url' ).split( '/' )[ 3 ]
-            lang = e.get( 'lang' )
-            s = e.get( 'status_display' )
-            t = e.get( 'time' )
-            r.add( sid=sid, lang=lang, status=s, timestamp=t )
+        try:
+            for e in json.loads( resp.text ).get( 'submissions_dump' ):
+                sid = e.get( 'url' ).split( '/' )[ 3 ]
+                lang = e.get( 'lang' )
+                s = e.get( 'status_display' )
+                t = e.get( 'time' )
+                r.add( sid=sid, lang=lang, status=s, timestamp=t )
+        except TypeError:
+            pass
 
         return r
 
 class Html( object ):
     """
-    HTML renderer of a problem.
-
-    This renderer turns a problem and solutions into HTML.
+    HTML renderer of a problem and its solution.
     """
 
     def __init__( self, p ):
@@ -619,7 +615,7 @@ class Html( object ):
         return '<pre><code>' + p.code + '</code></pre>' if p.solved else ''
 
     def __str__( self ):
-        return ''.join( [ self.title, self.tags, self.desc, self.code ] )
+        return ''.join( [ self.title, self.tags, self.desc ] )
 
 def login_required( f ):
     @functools.wraps( f )
