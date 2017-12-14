@@ -813,11 +813,12 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         if not self.topic:
             for t in sorted( self.topics.keys() ):
                 pl = self.topics[ t ]
-                todo = 0
-                for pid in pl:
-                    if not self.problems[ pid ].solved:
-                        todo += 1
-                print '   ', '%3d' % todo, t
+                if pl:
+                    todo = 0
+                    for pid in pl:
+                        if not self.problems[ pid ].solved:
+                            todo += 1
+                    print '   ', '%3d' % todo, t
             self.top()
 
         elif not self.pid:
