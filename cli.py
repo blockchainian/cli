@@ -398,26 +398,44 @@ class OJMixin( object ):
     def strip( self, s ):
         return s.replace( '\r', '' ).encode( 'ascii', 'ignore' )
 
+    def wrap( self, s ):
+        return '\n' + s.strip().rstrip() + '\n' * 2
+
     def get_problem( self, p ):
-        url = self.url + '/problems/%s/description/' % p.slug
-        cls = { 'class' : 'question-description' }
-        js = r'var pageData =\s*(.*?);'
+        url = self.url + '/graphql/'
+        referer = self.url + '/problems/%s/description/' % p.slug
+        headers = {
+                'referer' : referer,
+                'content-type' : 'application/json',
+                'x-csrftoken' : self.session.cookies[ 'csrftoken' ],
+        }
+        data = {
+            "query": """
+                query getQuestionDetail( $titleSlug: String! ) {
+                    question( titleSlug: $titleSlug ) {
+                        content
+                        codeDefinition
+                        sampleTestCase
+                    }
+                }
+            """,
+            "variables": {
+                "titleSlug": p.slug
+            },
+            "operationName":"getQuestionDetail",
+        }
 
-        resp = self.session.get( url )
+        resp = self.session.post( url, json=data, headers=headers )
 
-        soup = bs4.BeautifulSoup( resp.text, 'html.parser' )
-        for e in soup.find_all( 'div', attrs=cls ):
-            p.desc = self.strip( e.text )
-            p.html = self.strip( e.prettify() )
-            break
+        q = json.loads( resp.text )[ 'data' ][ 'question' ]
+        soup = bs4.BeautifulSoup( q.get( 'content' ), 'html.parser' )
+        p.html = self.strip( soup.prettify() )
+        p.desc = self.wrap( self.strip( soup.get_text() ) )
 
-        for s in re.findall( js, resp.text, re.DOTALL ):
-            v = execjs.eval( s )
-            for cs in v.get( 'codeDefinition' ):
-                if cs.get( 'text' ) == self.language:
-                    p.code = self.strip( cs.get( 'defaultCode', '' ) )
-            p.test = v.get( 'sampleTestCase' )
-            break
+        for cs in execjs.eval( q[ 'codeDefinition' ] ):
+            if cs.get( 'text' ) == self.language:
+                p.code = self.strip( cs.get( 'defaultCode', '' ) )
+        p.test = q.get( 'sampleTestCase' )
 
         if not p.todo:
             p.code = self.get_latest_solution( p )
