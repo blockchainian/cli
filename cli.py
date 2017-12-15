@@ -376,8 +376,8 @@ class OJMixin( object ):
         return ( topics, companies )
 
     def get_problems( self ):
-#       ps = 'algorithms/'
-        ps = 'favorite_lists/top-interview-questions/'
+        ps = 'algorithms/'
+#       ps = 'favorite_lists/top-interview-questions/'
         url = self.url + '/api/problems/' + ps
 
         resp = self.session.get( url )
