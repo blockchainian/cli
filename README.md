@@ -22,8 +22,6 @@ MacOS:
 
 ```sudo easy_install requests[security] bs4 PyExecJS ascii_graph```
 
-Please let me know if this works. Sorry I don't have a Macbook:)
- 
 ## Commands
 
 ```

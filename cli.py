@@ -586,6 +586,12 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     xlimit = 0
 
     def __init__( self ):
+        import readline
+        if 'libedit' in readline.__doc__:
+            readline.parse_and_bind("bind ^I rl_complete")
+        else:
+            readline.parse_and_bind("tab: complete")
+
         cmd.Cmd.__init__( self )
         Magic.__init__( self )
         if not os.path.exists( self.ws ):
