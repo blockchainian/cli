@@ -330,7 +330,7 @@ class OJMixin( object ):
             n = e.get( 'stat' ).get( 'total_submitted' )
             f = e.get( 'frequency' )
             t = e.get( 'status' )
-            ar = float( a ) / n
+            ar = float( a ) / n if n else 0
             problems[ i ] = Problem( pid=i, slug=s, rate=ar, freq=f, status=t )
 
         return problems

@@ -60,17 +60,21 @@ su      <session>       - Change session.
 A tag can refer to a topic (e.g. array) or a company (e.g. amazon).
 A keyword can be anything (including a tag).
 Commands and options can be completed via <TAB>.
+
+#:/>
 ```
 
 Control+D to exit.
 
 ## Demo
 
+At the root (`/`) level. `ls` lists all the topics. `#` is for problems without a topic.
+
 ```
 #:/> ls
      29 #
      81 array
-     28 backtracking
+     28 backtracking            <- 28 problems todo in backtracking
       5 binary-indexed-tree
      35 binary-search
      12 binary-search-tree
@@ -90,17 +94,22 @@ Control+D to exit.
 242 solved 18 failed 523 todo
 ```
 
+`cd <topic>` changes the current topic.
+
+At the topic level, `ls` lists the problems by difficulty level and acceptable rate. Levels are seperated by a blank line. At each level, the problems are listed in order of acceptance rate.
+The marks: `*` means `todo`, `x` `failed`, none means `solved`.
+
 ```
 #:/> cd heap
 #:/heap> ls
-     355 design-twitter
+     355 design-twitter                             <- the hardest
     *719 find-k-th-smallest-pair-distance
     *836 race-car
       23 merge-k-sorted-lists
     *218 the-skyline-problem
     *803 cheapest-flights-within-k-stops
 
-     295 find-median-from-data-stream
+     295 find-median-from-data-stream               <- medium level
     *895 shortest-path-to-get-all-keys
      373 find-k-pairs-with-smallest-sums
 ...
@@ -108,12 +117,14 @@ Control+D to exit.
     *692 top-k-frequent-words
     *794 swim-in-rising-water
 
-     378 kth-smallest-element-in-a-sorted-matrix
+     378 kth-smallest-element-in-a-sorted-matrix    <- easy level
      347 top-k-frequent-elements
      451 sort-characters-by-frequency
-    *761 employee-free-time
+    *761 employee-free-time                         <- the easiest
 11 solved 0 failed 17 todo
 ```
+
+`cd <number>` changes the current problem. Then `ls` shows the description. `pull` downloads the latest solution and sample test case from the online judge. If no solution was submitted, a boiler plate is used. The solution/boilerplate is saved in `./ws/<number>.<ext>` and can be edited. `cat` show the sample test case. It is saved in `./ws/tests.dat`. More test cases can be added to it and will be used by `check`.
 
 ```
 #:/heap> cd 23
@@ -142,14 +153,14 @@ ws/23.py
 ws/23.py << [[1,4,5],[1,3,4],[2,6]]
 ```
 
-Now that we have the problem description and the sample test case, start coding the solution and test it locally.
+Now that we have the problem description and the sample test case, start coding and test the solution locally.
 
 ```
 $ vim ./ws/23.py
 $ python ./ws/23.py
 ```
 
-Once the solution passes local tests, we can `check` it with or `push` it to the online judge.
+Once the solution passes test cases locally, we can `check` it with or `push` it to the online judge. `push` reports the runtime and number of tests passed.
 
 ```
 #:/heap/23-merge-k-sorted-lists> check
@@ -188,6 +199,8 @@ Runtime                                                                  N  ms
 Result: 131/131 tests passed
 Runtime: 64 ms
 ```
+
+Use `/<keywoard>` to search for problems matching a tag (`airbnb`) or a keyword (e.g. `palindrome`)
 
 ```
 #:/heap/23-merge-k-sorted-lists> cd ..
