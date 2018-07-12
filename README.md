@@ -96,11 +96,15 @@ At the root (`/`) level. `ls` lists all the topics. `#` is for problems without 
 
 `cd <topic>` changes the current topic.
 
-At the topic level, `ls` lists the problems by difficulty level and acceptable rate. Levels are seperated by a blank line. At each level, the problems are listed in order of acceptance rate.
+```
+#:/> cd heap
+#:/heap>
+```
+
+At the topic level, `ls` lists the problems by difficulty level and acceptance rate. Levels are seperated by a blank line. At each level, the problems are listed in the order of acceptance rate.
 The marks: `*` means `todo`, `x` `failed`, none means `solved`.
 
 ```
-#:/> cd heap
 #:/heap> ls
      355 design-twitter                             <- the hardest
     *719 find-k-th-smallest-pair-distance
@@ -124,7 +128,7 @@ The marks: `*` means `todo`, `x` `failed`, none means `solved`.
 11 solved 0 failed 17 todo
 ```
 
-`cd <number>` changes the current problem. Then `ls` shows the description. `pull` downloads the latest solution and sample test case from the online judge. If no solution was submitted, a boiler plate is used. The solution/boilerplate is saved in `./ws/<number>.<ext>` and can be edited. `cat` show the sample test case. It is saved in `./ws/tests.dat`. More test cases can be added to it and will be used by `check`.
+`cd <number>` changes the current problem. Then `ls` shows the description.
 
 ```
 #:/heap> cd 23
@@ -141,14 +145,21 @@ Input:
  2->6
 ]
 Output: 1->1->2->3->4->4->5->6
+```
 
+ `pull` downloads the latest solution and sample test case from the online judge. If no solution was submitted, a boiler plate is used. The solution/boilerplate is saved in `./ws/<number>.<ext>` and can be edited.
+
+```
 #:/heap/23-merge-k-sorted-lists> pull
 ,___,
 [O.o]  Replace working copy? (y/N)
 /)__)
 -"--"-y
 ws/23.py
+```
+`cat` show the sample test case. It is saved in `./ws/tests.dat`. Test cases can be added to it and be used by `check`.
 
+```
 #:/heap/23-merge-k-sorted-lists> cat
 ws/23.py << [[1,4,5],[1,3,4],[2,6]]
 ```
@@ -160,7 +171,7 @@ $ vim ./ws/23.py
 $ python ./ws/23.py
 ```
 
-Once the solution passes test cases locally, we can `check` it with or `push` it to the online judge. `push` reports the runtime and number of tests passed.
+The default programming language is `Python`. To change it, use `chmod <language>`. Once the solution passes tests locally, we can `check` it with or `push` it to the online judge. `push` reports the runtime and number of tests passed.
 
 ```
 #:/heap/23-merge-k-sorted-lists> check
@@ -200,7 +211,7 @@ Result: 131/131 tests passed
 Runtime: 64 ms
 ```
 
-Use `/<keywoard>` to search for problems matching a tag (`airbnb`) or a keyword (e.g. `palindrome`)
+`/<keyword>` searches for problems matching a tag (`airbnb`) or a keyword (e.g. `palindrome`)
 
 ```
 #:/heap/23-merge-k-sorted-lists> cd ..
@@ -243,4 +254,6 @@ Use `/<keywoard>` to search for problems matching a tag (`airbnb`) or a keyword 
 #:/>
 ```
 
-The solutions are saved in the `./ws/` directory and can be pushed to `git` which allows reviewing solutions by revision.  My workspace is [here](https://github.com/chenpengcheng/leetcode).
+The solutions are saved in the `./ws/` directory and can be pushed to `GitHub`. My workspace is [here](https://github.com/chenpengcheng/leetcode).
+
+`print` generates a nice [HTML](http://www.spiderman.ly/all.html). To include the solutions, you have to change a few lines of code. It has syntax highlighting :-)
