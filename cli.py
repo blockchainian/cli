@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import cmd, contextlib, functools, getpass, os, pprint, random, re, sys, time
+import cmd, contextlib, functools, getpass, inspect, os, pprint, random, re, sys, time
 import bs4, difflib, execjs, json, requests
 from datetime import datetime
 
@@ -112,7 +112,7 @@ class Result( object ):
             total = result.get( 'total_testcases' )
             passed = result.get( 'total_correct' )
             if total:
-                self.result.append( "%d/%d tests passed" % ( passed, total ) )
+                self.result.append( '%d/%d tests passed' % ( passed, total ) )
 
         self.errors = []
         for e in [ 'compile_error', 'runtime_error', 'error' ]:
@@ -350,7 +350,7 @@ class OJMixin( object ):
                 'x-csrftoken' : self.session.cookies[ 'csrftoken' ],
         }
         data = {
-            "query": """
+            'query': """
                 query getQuestionDetail( $titleSlug: String! ) {
                     question( titleSlug: $titleSlug ) {
                         content
@@ -359,10 +359,10 @@ class OJMixin( object ):
                     }
                 }
             """,
-            "variables": {
-                "titleSlug": p.slug
+            'variables': {
+                'titleSlug': p.slug
             },
-            "operationName":"getQuestionDetail",
+            'operationName':'getQuestionDetail',
         }
 
         resp = self.session.post( url, json=data, headers=headers )
@@ -588,9 +588,9 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
     def __init__( self ):
         import readline
         if 'libedit' in readline.__doc__:
-            readline.parse_and_bind("bind ^I rl_complete")
+            readline.parse_and_bind('bind ^I rl_complete')
         else:
-            readline.parse_and_bind("tab: complete")
+            readline.parse_and_bind('tab: complete')
 
         cmd.Cmd.__init__( self )
         Magic.__init__( self )
@@ -723,7 +723,20 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             for pd in [ self.topics, self.companies ]:
                 update( pd )
 
+    def do_help( self, arg ):
+        methods = inspect.getmembers(CodeShell, predicate=inspect.ismethod)
+        for key, method in methods:
+            if key.startswith('do_'):
+                name = key.split('_')[1]
+                doc = method.__doc__
+                if (not arg or arg == name) and doc:
+                    print name, '\t', doc 
+        print """
+A tag can refer to a topic (e.g. array) or a company (e.g. amazon).
+A keyword can be anything or a tag."""
+
     def do_login( self, unused=None ):
+        """\t\t- Login into the online judge."""
         self.login()
         self.load( force=True )
         self.limit( self.xlimit )
@@ -738,8 +751,9 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
     @login_required
     def do_su( self, name ):
+        """<session>\t- Change session."""
         if name not in self.sessions:
-            prompt = self.magic( "Create session? (y/N)" )
+            prompt = self.magic( 'Create session? (y/N)' )
             try:
                 c = raw_input( prompt ).lower() in [ 'y', 'yes']
             except EOFError:
@@ -757,6 +771,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         return self.complete_all( self.langs, *args )
 
     def do_chmod( self, lang ):
+        """<language>\t- Change programming language."""
         if lang in self.langs and lang != self.lang:
             self.lang = lang
             for p in self.problems.itervalues():
@@ -766,6 +781,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             print self.lang
 
     def do_ls( self, unused=None ):
+        """\t\t- Show problem(s)."""
         if not self.topic:
             for t in sorted( self.topics.keys() ):
                 pl = self.topics[ t ]
@@ -789,6 +805,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             print p.desc
 
     def do_find( self, key ):
+        """<keyword>\t- Find problems by keyword. Alias: /<keyword>."""
         if key:
             if key in self.companies:
                 fn = lambda p: p.pid in self.companies[ key ]
@@ -805,6 +822,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
         return self.complete_all( keys, *args )
 
     def do_cd( self, arg ):
+        """<tag|number>\t- Change problem(s)."""
         if arg == '..':
             if self.pid:
                 self.pid = None
@@ -821,12 +839,14 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     self.topic = topics[ 0 ]
 
     def do_cat( self, unused ):
+        """\t\t- Show test case(s)."""
         if self.pad and os.path.isfile( self.tests ):
             with open( self.tests, 'r' ) as f:
                 tests = f.read()
             print self.pad, '<<', ', '.join( tests.splitlines() )
 
     def do_pull( self, arg ):
+        """[*]\t\t- Pull latest solution(s). '*': all problems."""
         sync = arg is '*'
         def writable( p ):
             if sync:
@@ -834,7 +854,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             elif not os.path.isfile( self.pad ):
                 w = True
             else:
-                prompt = self.magic( "Replace working copy? (y/N)" )
+                prompt = self.magic( 'Replace working copy? (y/N)' )
                 try:
                     w = raw_input( prompt ).lower() in [ 'y', 'yes']
                 except EOFError:
@@ -860,6 +880,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
     @login_required
     def do_check( self, unused ):
+        """\t\t- Test the solution."""
         p = self.problems.get( self.pid )
         if p and os.path.isfile( self.pad ):
             with open( self.pad, 'r' ) as f:
@@ -873,6 +894,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
     @login_required
     def do_push( self, unused ):
+        """\t\t- Submit the solution."""
         def histogram( t, times, limit=25 ):
             try:
                 from ascii_graph import Pyasciigraph
@@ -912,6 +934,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
 
     @login_required
     def do_cheat( self, limit ):
+        """<number>\t- C.H.E.A.T."""
         p = self.problems.get( self.pid )
         if p:
             sid = p.record.sid
@@ -925,6 +948,7 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                 print c
 
     def do_print( self, key ):
+        """[keyword]\t- Print problems by keyword in HTML."""
         def order( p, q ):
             a = ( p.rate, p.pid )
             b = ( q.rate, q.pid )
@@ -969,9 +993,11 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
             f.write( Html.tail() )
 
     def do_clear( self, unused ):
+        """\t\t- Clear screen."""
         os.system( 'clear' )
 
     def do_limit( self, limit ):
+        """<number>\t- Limit the number of problems."""
         if limit.isdigit():
             limit = int( limit )
             if limit > self.xlimit > 0 or self.xlimit > limit == 0:
