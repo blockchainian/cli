@@ -733,7 +733,8 @@ class CodeShell( cmd.Cmd, OJMixin, Magic ):
                     print name, '\t', doc 
         print """
 A tag can refer to a topic (e.g. array) or a company (e.g. amazon).
-A keyword can be anything or a tag."""
+A keyword can be anything (including a tag).
+Commands and options can be completed by <TAB>."""
 
     def do_login( self, unused=None ):
         """\t\t- Login into the online judge."""
