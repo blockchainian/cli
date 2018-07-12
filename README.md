@@ -41,6 +41,7 @@ Welcome student!
 (")_(")
 243 solved 17 failed 523 todo
 
+#:/> ?
 cat                     - Show test case(s).
 cd      <tag|number>    - Change problem(s).
 cheat   <number>        - C.H.E.A.T.
