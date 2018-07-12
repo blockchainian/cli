@@ -59,8 +59,9 @@ su      <session>       - Change session.
 
 A tag can refer to a topic (e.g. array) or a company (e.g. amazon).
 A keyword can be anything (including a tag).
-Commands and options can be completed by <TAB>.
+Commands and options can be completed via <TAB>.
 ```
+
 Control+D to exit.
 
 ## Demo
@@ -142,7 +143,14 @@ ws/23.py << ["WordDictionary","addWord","addWord","addWord","search","search","s
 ws/23.py
 ```
 
-Now that we have the problem description and the sample test case, start coding the solution and test it locally. Once the solution passed the sample test case, we can `check` it with or `push` it to the online judge.
+Now that we have the problem description and the sample test case, start coding the solution and test it locally.
+
+```
+vim ./ws/23.py
+python ./ws/23.py
+```
+
+Once the solution passes local tests, we can `check` it with or `push` it to the online judge.
 
 ```
 #:/heap/23-merge-k-sorted-lists> check
