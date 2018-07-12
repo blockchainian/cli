@@ -28,7 +28,7 @@ sudo easy_install requests[security] bs4 PyExecJS ascii_graph
 
 ## Usage
 
-The most common commands are: `cd`, `ls`, `cat`, `check`, `push`, `cheat`, `clear` and `/`.
+The most common commands are: `cd`, `ls`, `pull`, `cat`, `check`, `push`, `cheat`, `clear` and `/`.
 
 ```
 $ ./cli.py
