@@ -133,7 +133,7 @@ Output: 1->1->2->3->4->4->5->6
 
 
 #:/heap/23-merge-k-sorted-lists> cat
-ws/23.py << ["WordDictionary","addWord","addWord","addWord","search","search","search","search"], [[],["bad"],["dad"],["mad"],["pad"],["bad"],[".ad"],["b.."]]
+ws/23.py << [[1,4,5],[1,3,4],[2,6]]
 
 #:/heap/23-merge-k-sorted-lists> pull
 ,___,
