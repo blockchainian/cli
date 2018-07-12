@@ -131,23 +131,22 @@ Input:
 ]
 Output: 1->1->2->3->4->4->5->6
 
-
-#:/heap/23-merge-k-sorted-lists> cat
-ws/23.py << [[1,4,5],[1,3,4],[2,6]]
-
 #:/heap/23-merge-k-sorted-lists> pull
 ,___,
 [O.o]  Replace working copy? (y/N)
 /)__)
 -"--"-y
 ws/23.py
+
+#:/heap/23-merge-k-sorted-lists> cat
+ws/23.py << [[1,4,5],[1,3,4],[2,6]]
 ```
 
 Now that we have the problem description and the sample test case, start coding the solution and test it locally.
 
 ```
-vim ./ws/23.py
-python ./ws/23.py
+$ vim ./ws/23.py
+$ python ./ws/23.py
 ```
 
 Once the solution passes local tests, we can `check` it with or `push` it to the online judge.
