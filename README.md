@@ -184,7 +184,8 @@ Runtime: 64 ms
 
 ```
 #:/heap/23-merge-k-sorted-lists> cd ..
-#:/heap> /airbnb
+#:/heap> cd ..
+#:/> /airbnb
      220 contains-duplicate-iii
       68 text-justification
       10 regular-expression-matching
@@ -218,4 +219,8 @@ Runtime: 64 ms
     *761 employee-free-time
      136 single-number
 20 solved 1 failed 9 todo
+
+#:/>
 ```
+
+The solutions are saved in the `./ws/` directory and can be pushed to `git` which allows reviewing solutions by revision.  My workspace is [here](https://github.com/chenpengcheng/leetcode).
