@@ -147,7 +147,7 @@ Input:
 Output: 1->1->2->3->4->4->5->6
 ```
 
- `pull` downloads the latest solution and sample test case from the online judge. If no solution was submitted, a boiler plate is used. The solution/boilerplate is saved in `./ws/<number>.<ext>` and can be edited.
+`pull` downloads the latest solution and sample test case from the online judge. If no solution was submitted, a boiler plate is used. The solution/boilerplate is saved in `./ws/<number>.<ext>` and can be edited.
 
 ```
 #:/heap/23-merge-k-sorted-lists> pull

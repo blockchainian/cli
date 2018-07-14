@@ -457,8 +457,8 @@ class OJMixin( object ):
             try:
                 df = json.loads( v.get( 'distribution_formatted' ) )
                 if df.get( 'lang' ) == self.lang:
-                    for t, n in df.get( 'distribution' ):
-                        runtimes.append( ( int( t ), float( n ) ) )
+                    for t, p in df.get( 'distribution' ):
+                        runtimes.append( ( int( t ), float( p ) ) )
             except ValueError:
                 pass
 
@@ -900,15 +900,18 @@ Commands and options can be completed by <TAB>."""
             try:
                 from ascii_graph import Pyasciigraph
 
+                r = 0
                 for i in xrange( len( times ) ):
-                    t1, n = times[ i ]
-                    if t1 >= t:
-                        times[ i ] = ( str( t ) + '*', n )
-                        break
+                    t1, p = times[ i ]
+                    if t1 == t:
+                        times[ i ] = ( str( t ) + '*', p )
+                    elif t1 < t:
+                        r += p
 
                 g = Pyasciigraph( graphsymbol='*' )
-                for l in g.graph( 'Runtime' + 66 * ' ' + 'N  ms', times[ :limit ] ):
+                for l in g.graph( 'Runtime' + 66 * ' ' + 'N  ms', times[ :-limit:-1 ] ):
                     print l
+                print 'Rank: %.2f%%' % ( r / 100 )
             except ImportError:
                 pass
 
