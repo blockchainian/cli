@@ -909,7 +909,7 @@ Commands and options can be completed by <TAB>."""
                         r += p
 
                 g = Pyasciigraph( graphsymbol='*' )
-                for l in g.graph( 'Runtime' + 66 * ' ' + 'N  ms', times[ :-limit:-1 ] ):
+                for l in g.graph( 'Runtime' + 66 * ' ' + '%  ms', times[ :-limit:-1 ] ):
                     print l
                 print 'Rank: %.2f%%' % ( r / 100 )
             except ImportError:
