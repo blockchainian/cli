@@ -20,10 +20,10 @@ sudo pip install requests bs4 PyExecJS ascii_graph
 ### Mac OSX
 
 ```
-brew install openssl
 sudo easy_install pip
-env LDFLAGS="-L$(brew --prefix openssl)/lib" CFLAGS="-I$(brew --prefix openssl)/include" sudo pip install cryptography
-sudo easy_install requests[security] bs4 PyExecJS ascii_graph
+brew install openssl
+export LDFLAGS="-L$(brew --prefix openssl)/lib" CFLAGS="-I$(brew --prefix openssl)/include"
+pip install --user cryptography requests bs4 PyExecJS ascii_graph
 ```
 
 ## Usage
