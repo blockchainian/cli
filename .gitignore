@@ -1,2 +1,4 @@
-.*.sw[a-z]
-ws/
+build/
+dist/
+leetcode_cli.egg-info/
+*.pyc

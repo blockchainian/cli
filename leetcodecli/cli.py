@@ -603,7 +603,7 @@ def login_required(f):
 
 
 class CodeShell(cmd.Cmd, OJMixin, Magic):
-    sessions, ws = {}, 'ws'
+    sessions, ws = {}, os.path.expanduser("~/ws")
     topics, companies, problems, cheatsheet = {}, {}, {}, {}
     topic = pid = None
     xlimit = 0
@@ -927,15 +927,16 @@ Commands and options can be completed by <TAB>."""
                 r = 0
                 for i in xrange(len(times)):
                     t1, p = times[i]
-                    if t1 == t:
-                        times[i] = (str(t) + '*', p)
-                    elif t1 < t:
+                    if t1 <= t:
+                        times[i] = (str(t1) + '*', p)
+                        break
+                    else:
                         r += p
 
                 g = Pyasciigraph(graphsymbol='*')
                 for L in g.graph('Runtime' + 66 * ' ' + '%  ms', times[:-limit:-1]):
                     print L
-                print 'Rank: %.2f%%' % (r / 100)
+                print 'Rank: %.2f%%' % (100 - r)
             except ImportError:
                 pass
 
@@ -1038,7 +1039,7 @@ Commands and options can be completed by <TAB>."""
         return True
 
 
-if __name__ == '__main__':
+def main():
     shell = CodeShell()
     shell.do_login()
     shell.cmdloop()

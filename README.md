@@ -1,29 +1,23 @@
 # LeetCode CLI
 
-Start `tmux`, `VIM` and `cli.py`. Practice as many questions as you can:-)
+Start `tmux`, `vim` and `leetcode-cli`. Practice as many questions as you can:-)
 
 This tool is not affiliated with [LeetCode](https://leetcode.com).
 
-## Download and Install
-
-```
-git clone https://github.com/chenpengcheng/cli.git
-```
+## Install
 
 ### Linux
 
 ```
 sudo apt install nodejs
-sudo pip install requests bs4 PyExecJS ascii_graph
+sudo pip install leetcode-cli
 ```
 
 ### Mac OSX
 
 ```
-sudo easy_install pip
-brew install openssl
-export LDFLAGS="-L$(brew --prefix openssl)/lib" CFLAGS="-I$(brew --prefix openssl)/include"
-pip install --user cryptography requests bs4 PyExecJS ascii_graph
+brew install node
+sudo pip install leetcode-cli
 ```
 
 ## Usage
@@ -31,7 +25,7 @@ pip install --user cryptography requests bs4 PyExecJS ascii_graph
 The most common commands are: `cd`, `ls`, `pull`, `cat`, `check`, `push`, `cheat`, `clear` and `/`.
 
 ```
-$ ./cli.py
+$ leetcode-cli
 
 Username: student
 Password:
