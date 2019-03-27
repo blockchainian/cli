@@ -252,18 +252,13 @@ class OJMixin(object):
         password = getpass.getpass()
 
         self.session.cookies.clear()
-        resp = self.session.get(url)
-
-        soup = bs4.BeautifulSoup(resp.text, 'html.parser')
-        for e in soup.find_all('input', attrs=name):
-            csrf = e['value']
-            break
+        self.session.get(url)
 
         headers = {'referer': url}
         data = {
             'login': username,
             'password': password,
-            'csrfmiddlewaretoken': csrf
+            'csrfmiddlewaretoken': self.session.cookies.get('csrftoken')
         }
 
         resp = self.session.post(url, data, headers=headers)
