@@ -469,7 +469,7 @@ class OJMixin(object):
         for s in re.findall(js, resp.text, re.DOTALL):
             v = execjs.eval(s)
             try:
-                df = json.loads(v.get('distribution_formatted'))
+                df = json.loads(v.get('runtimeDistributionFormatted'))
                 if df.get('lang') == self.lang:
                     for t, p in df.get('distribution'):
                         runtimes.append((int(t), float(p)))
@@ -921,16 +921,16 @@ Commands and options can be completed by <TAB>."""
                 r = 0
                 for i in xrange(len(times)):
                     t1, p = times[i]
-                    if t1 <= t:
+                    if t1 >= t:
                         times[i] = (str(t1) + '*', p)
                         break
                     else:
                         r += p
 
                 g = Pyasciigraph(graphsymbol='*')
-                for L in g.graph('Runtime' + 66 * ' ' + '%  ms', times[:-limit:-1]):
+                for L in g.graph('Runtime' + 66 * ' ' + '%  ms', times[1:limit]):
                     print L
-                print 'Rank: %.2f%%' % (100 - r)
+                print 'Rank: %.2f%%' % r
             except ImportError:
                 pass
 
