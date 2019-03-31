@@ -247,7 +247,6 @@ class OJMixin(object):
 
     def login(self):
         url = self.url + '/accounts/login/'
-        name = {'name': 'csrfmiddlewaretoken'}
         username = raw_input('Username: ')
         password = getpass.getpass()
 
@@ -260,8 +259,8 @@ class OJMixin(object):
             'password': password,
             'csrfmiddlewaretoken': self.session.cookies.get('csrftoken')
         }
+        self.session.post(url, data, headers=headers)
 
-        resp = self.session.post(url, data, headers=headers)
         if self.session.cookies.get('LEETCODE_SESSION'):
             self.loggedIn = True
             print 'Welcome %s!' % username
