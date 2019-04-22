@@ -446,7 +446,7 @@ class OJMixin(object):
         for s in re.findall(js, resp.text, re.DOTALL):
             v = execjs.eval(s)
             try:
-                df = json.loads(v.get('distribution_formatted'))
+                df = json.loads(v.get('runtimeDistributionFormatted'))
                 if df.get('lang') == self.lang:
                     for e in df.get('distribution')[: limit]:
                         t = int(e[0])
