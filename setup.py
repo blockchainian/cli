@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="leetcode-cli",
-    version="0.0.5",
+    version="0.0.6",
     author="Pengcheng Chen",
     author_email="pengcheng.chen@gmail.com",
     description="LeetCode CLI",
