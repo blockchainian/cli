@@ -2,20 +2,21 @@
 
 import cmd
 import contextlib
+import difflib
 import functools
 import getpass
 import inspect
+import json
 import os
 import random
 import re
 import sys
 import time
-import bs4
-import difflib
-import execjs
-import json
-import requests
 from datetime import datetime
+
+import bs4
+import execjs
+import requests
 
 
 class Magic(object):
@@ -560,7 +561,8 @@ class Html(object):
     @property
     def title(self):
         p = self.p
-        s = '<h4>' + str(p.pid) + ' ' + p.slug.replace('-', ' ').title() + '</h4>'
+        s = '<h4>' + str(p.pid) + ' ' + p.slug.replace('-',
+                                                       ' ').title() + '</h4>'
         if p.todo:
             s = '<div class="bg-primary text-white">' + s + '</div>'
         elif p.failed or p.rate < 0.34:
@@ -928,7 +930,8 @@ Commands and options can be completed by <TAB>."""
                         r += p
 
                 g = Pyasciigraph(graphsymbol='*')
-                for L in g.graph('Runtime' + 66 * ' ' + '%  ms', times[1:limit]):
+                for L in g.graph('Runtime' + 66 * ' ' + '%  ms',
+                                 times[1:limit]):
                     print L
                 print 'Rank: %.2f%%' % r
             except ImportError:
@@ -940,12 +943,11 @@ Commands and options can be completed by <TAB>."""
                 code = f.read()
                 result = self.test_solution(p, code, full=True)
                 if result:
-                    p.solved, xsolved = result.success, p.solved
+                    p.solved = result.success
                     if p.solved:
                         runtimes = self.get_solution_runtimes(result.sid)
                         histogram(result.runtime, runtimes)
-                        if not xsolved:
-                            result.fintime = (datetime.now() - self.ts).seconds
+                        result.fintime = (datetime.now() - self.ts).seconds
                         status = 'Accepted'
                     else:
                         with open(self.tests, 'a+') as f:
