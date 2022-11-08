@@ -14,6 +14,7 @@ import sys
 import time
 from datetime import datetime
 
+import browser_cookie3
 import bs4
 import execjs
 import requests
@@ -92,7 +93,7 @@ class Problem(object):
 
     @property
     def tags(self):
-        L = filter(lambda x: x != '#', self.topics)
+        L = list(filter(lambda x: x != '#', self.topics))
         if not self.todo:
             L.append(str(self.record))
         return ', '.join(L).title()
@@ -118,7 +119,7 @@ class Result(object):
         self.fintime = None
 
         def split(s):
-            return s.splitlines() if type(s) in [str, unicode] else s
+            return s.splitlines() if type(s) in [bytes, str] else s
 
         self.input = result.get('last_testcase', result.get('input', ''))
         self.output = split(result.get('code_output', ''))
@@ -225,7 +226,7 @@ class Session(object):
 
 
 class OJMixin(object):
-    url = 'https://leetcode.com'
+    domain, url = 'leetcode.com', 'https://leetcode.com'
     langs = ['c', 'cpp', 'golang', 'java', 'javascript', 'python', 'scala']
     lang = 'python'
 
@@ -247,24 +248,11 @@ class OJMixin(object):
     session, loggedIn = requests.session(), False
 
     def login(self):
-        url = self.url + '/accounts/login/'
-        username = raw_input('Username: ')
-        password = getpass.getpass()
-
-        self.session.cookies.clear()
-        self.session.get(url)
-
-        headers = {'referer': url}
-        data = {
-            'login': username,
-            'password': password,
-            'csrfmiddlewaretoken': self.session.cookies.get('csrftoken')
-        }
-        self.session.post(url, data, headers=headers)
+        self.session.cookies.update(browser_cookie3.load(domain_name=self.domain))
 
         if self.session.cookies.get('LEETCODE_SESSION'):
             self.loggedIn = True
-            print 'Welcome %s!' % username
+            print('Welcome to %s!' % self.domain)
         else:
             self.loggedIn = False
 
@@ -351,7 +339,7 @@ class OJMixin(object):
         return problems
 
     def strip(self, s):
-        return s.replace('\r', '').encode('ascii', 'ignore')
+        return s.replace('\r', '').encode('ascii', 'ignore').decode()
 
     def wrap(self, s):
         return '\n' + s.strip().rstrip() + '\n' * 2
@@ -481,9 +469,9 @@ class OJMixin(object):
 
     def test_solution(self, p, code, tests='', full=False):
         if full:
-            epUrl, sidKey = 'submit/', 'submission_id'
+            epUrl, sidKey = 'submit', 'submission_id'
         else:
-            epUrl, sidKey = 'interpret_solution/', 'interpret_id'
+            epUrl, sidKey = 'interpret_solution', 'interpret_id'
 
         url = self.url + '/problems/%s/%s/' % (p.slug, epUrl)
         referer = self.url + '/problems/%s/description/' % p.slug
@@ -514,7 +502,7 @@ class OJMixin(object):
     def get_result(self, sid, timeout=30):
         url = self.url + '/submissions/detail/%s/check/' % sid
 
-        for i in xrange(timeout):
+        for i in range(timeout):
             time.sleep(1)
             resp = self.session.get(url)
             data = json.loads(resp.text)
@@ -647,7 +635,7 @@ class CodeShell(cmd.Cmd, OJMixin, Magic):
 
     @property
     def sname(self):
-        for s in self.sessions.itervalues():
+        for s in self.sessions.values():
             if s.active:
                 return s.name
         return '~'
@@ -677,9 +665,9 @@ class CodeShell(cmd.Cmd, OJMixin, Magic):
             self.topics, self.companies = self.get_tags()
         if not self.problems or force:
             self.problems = self.get_problems()
-            pl = set(self.problems.iterkeys())
+            pl = set(self.problems)
 
-            for t, tpl in self.topics.iteritems():
+            for t, tpl in self.topics.items():
                 for pid in tpl[:]:
                     p = self.problems.get(pid)
                     if p:
@@ -691,7 +679,7 @@ class CodeShell(cmd.Cmd, OJMixin, Magic):
             self.topics['#'] = list(sorted(pl))
             map(lambda i: self.problems[i].topics.append('#'), pl)
 
-            for c, cpl in self.companies.iteritems():
+            for c, cpl in self.companies.items():
                 cpl -= set(filter(lambda i: i not in self.problems, cpl))
 
     @contextlib.contextmanager
@@ -706,19 +694,19 @@ class CodeShell(cmd.Cmd, OJMixin, Magic):
                 todo += 1
         yield
         if pl:
-            print '%d solved %d failed %d todo' % (solved, failed, todo)
+            print('%d solved %d failed %d todo' % (solved, failed, todo))
 
     def list(self, pl):
         with self.count(pl):
             r = [1, 0.45, 0.3]
             for p in sorted(pl, key=lambda p: (p.rate, p.pid)):
                 if p.rate > r[-1]:
-                    print ''
+                    print('')
                     r.pop()
-                print '   ', p
+                print('   ', p)
 
     def top(self):
-        with self.count(self.problems.itervalues()):
+        with self.count(self.problems.values()):
             pass
 
     def limit(self, limit):
@@ -728,7 +716,7 @@ class CodeShell(cmd.Cmd, OJMixin, Magic):
 
         def update(pd):
             for k in pd.keys():
-                pl = filter(lambda i: i not in ps, pd[k])
+                pl = list(filter(lambda i: i not in ps, pd[k]))
                 if pl:
                     pd[k] = pl
                 else:
@@ -749,11 +737,11 @@ class CodeShell(cmd.Cmd, OJMixin, Magic):
                 name = key.split('_')[1]
                 doc = method.__doc__
                 if (not arg or arg == name) and doc:
-                    print name, '\t', doc
-        print """
+                    print(name, '\t', doc)
+        print("""
 A tag can refer to a topic (e.g. array) or a company (e.g. amazon).
 A keyword can be anything (including a tag).
-Commands and options can be completed by <TAB>."""
+Commands and options can be completed by <TAB>.""")
 
     def do_login(self, unused=None):
         """\t\t- Login into the online judge."""
@@ -762,7 +750,7 @@ Commands and options can be completed by <TAB>."""
         self.limit(self.xlimit)
         self.topic = self.pid = None
         if self.loggedIn:
-            print self.motd
+            print(self.motd)
             self.sessions = self.get_sessions()
             self.top()
 
@@ -775,7 +763,7 @@ Commands and options can be completed by <TAB>."""
         if name not in self.sessions:
             prompt = self.magic('Create session? (y/N)')
             try:
-                c = raw_input(prompt).lower() in ['y', 'yes']
+                c = input(prompt).lower() in ['y', 'yes']
             except EOFError:
                 c = False
             if c:
@@ -794,11 +782,11 @@ Commands and options can be completed by <TAB>."""
         """<language>\t- Change programming language."""
         if lang in self.langs and lang != self.lang:
             self.lang = lang
-            for p in self.problems.itervalues():
+            for p in self.problems.values():
                 p.code = ''
             self.cheatsheet.clear()
         else:
-            print self.lang
+            print(self.lang)
 
     def do_ls(self, unused=None):
         """\t\t- Show problem(s)."""
@@ -810,7 +798,7 @@ Commands and options can be completed by <TAB>."""
                     for pid in pl:
                         if not self.problems[pid].solved:
                             todo += 1
-                    print '   ', '%3d' % todo, t
+                    print('   ', '%3d' % todo, t)
             self.top()
 
         elif not self.pid:
@@ -821,8 +809,8 @@ Commands and options can be completed by <TAB>."""
             if not p.loaded:
                 self.get_problem(p)
             if p.tags:
-                print '[%s]' % p.tags
-            print p.desc
+                print('[%s]' % p.tags)
+            print(p.desc)
 
     def do_find(self, key):
         """<keyword>\t- Find problems by keyword. Alias: /<keyword>."""
@@ -831,7 +819,7 @@ Commands and options can be completed by <TAB>."""
                 def fn(p): return p.pid in self.companies[key]
             else:
                 def fn(p): return p.slug.find(key) != -1
-            pl = filter(fn, self.problems.itervalues())
+            pl = list(filter(fn, self.problems.values()))
             self.list(pl)
 
     def complete_cd(self, *args):
@@ -863,11 +851,11 @@ Commands and options can be completed by <TAB>."""
         if self.pad and os.path.isfile(self.tests):
             with open(self.tests, 'r') as f:
                 tests = f.read()
-            print self.pad, '<<', ', '.join(tests.splitlines())
+            print(self.pad, '<<', ', '.join(tests.splitlines()))
 
     def do_pull(self, arg):
-        """[*]\t\t- Pull latest solution(s). '*': all problems."""
-        sync = arg is '*'
+        """[*]\t\t- Pull latest solution(s). '*': all solved problems."""
+        sync = arg == '*'
 
         def writable(p):
             if sync:
@@ -877,12 +865,13 @@ Commands and options can be completed by <TAB>."""
             else:
                 prompt = self.magic('Replace working copy? (y/N)')
                 try:
-                    w = raw_input(prompt).lower() in ['y', 'yes']
+                    w = input(prompt).lower() in ['y', 'yes']
                 except EOFError:
                     w = False
             return w
 
         pl, xpid = sorted(self.problems) if sync else [self.pid], self.pid
+
         for pid in pl:
             p = self.problems.get(pid)
             if p:
@@ -893,7 +882,7 @@ Commands and options can be completed by <TAB>."""
                     self.pid = pid
                     with open(self.pad, 'w') as f:
                         f.write(p.code)
-                    print self.pad
+                    print(self.pad)
 
                 with open(self.tests, 'w') as f:
                     f.write(p.test)
@@ -910,8 +899,8 @@ Commands and options can be completed by <TAB>."""
                     tests = tf.read()
                     result = self.test_solution(p, code, tests)
                     if result:
-                        print 'Input: ', ', '.join(tests.splitlines())
-                        print result
+                        print('Input: ', ', '.join(tests.splitlines()))
+                        print(result)
 
     @login_required
     def do_push(self, unused):
@@ -921,7 +910,7 @@ Commands and options can be completed by <TAB>."""
                 from ascii_graph import Pyasciigraph
 
                 r = 0
-                for i in xrange(len(times)):
+                for i in range(len(times)):
                     t1, p = times[i]
                     if t1 >= t:
                         times[i] = (str(t1) + '*', p)
@@ -932,8 +921,8 @@ Commands and options can be completed by <TAB>."""
                 g = Pyasciigraph(graphsymbol='*')
                 for L in g.graph('Runtime' + 66 * ' ' + '%  ms',
                                  times[1:limit]):
-                    print L
-                print 'Rank: %.2f%%' % r
+                    print(L)
+                print('Rank: %.2f%%' % r)
             except ImportError:
                 pass
 
@@ -955,7 +944,7 @@ Commands and options can be completed by <TAB>."""
                                 f.write('\n' + result.input)
                         status = 'Wrong Answer'
                     p.record.add(sid=result.sid, lang=self.lang, status=status)
-                    print result
+                    print(result)
 
     @login_required
     def do_cheat(self, limit):
@@ -970,7 +959,7 @@ Commands and options can be completed by <TAB>."""
 
             limit = 1 if not limit else int(limit)
             for c in cs[: limit]:
-                print c
+                print(c)
 
     def do_print(self, key):
         """[keyword]\t- Print problems by keyword in HTML."""
@@ -1002,14 +991,14 @@ Commands and options can be completed by <TAB>."""
 
         def fname(key):
             L = [self.sname, str(self.xlimit), key]
-            L = filter(lambda w: w and w not in ('0', '#'), L)
+            L = list(filter(lambda w: w and w not in ('0', '#'), L))
             return '-'.join(L) or 'all'
 
         topics, printed = find(key), set()
 
         with open(self.ws + '/%s.html' % fname(key), 'w') as f:
             f.write(Html.header())
-            for t, pids in sorted(topics.iteritems()):
+            for t, pids in sorted(topics.items()):
                 pl = load(pids, len(printed))
                 for p in sorted(pl, order):
                     if p.pid not in printed:
@@ -1029,7 +1018,7 @@ Commands and options can be completed by <TAB>."""
                 self.load(force=True)
             self.limit(limit)
         elif self.xlimit:
-            print self.xlimit
+            print(self.xlimit)
 
     def do_eof(self, arg):
         return True

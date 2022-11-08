@@ -27,9 +27,6 @@ The most common commands are: `cd`, `ls`, `pull`, `cat`, `check`, `push`, `cheat
 ```
 $ leetcode-cli
 
-Username: student
-Password:
-Welcome student!
  (\_/)
 =(^.^)=
 (")_(")
@@ -38,7 +35,7 @@ Welcome student!
 #:/> ?
 cat                     - Show test case(s).
 cd      <tag|number>    - Change problem(s).
-cheat   <number>        - C.H.E.A.T.
+cheat   <number>        - Find the best solution.
 check                   - Test the solution.
 chmod   <language>      - Change programming language.
 clear                   - Clear screen.
@@ -47,7 +44,7 @@ limit   <number>        - Limit the number of problems.
 login                   - Login into the online judge.
 ls                      - Show problem(s).
 print   [keyword]       - Print problems by keyword in HTML.
-pull    [*]             - Pull latest solution(s). '*': all problems.
+pull    [*]             - Pull latest solution(s). '*': all solved problems.
 push                    - Submit the solution.
 su      <session>       - Change session.
 

@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="leetcode-cli",
-    version="0.0.6",
+    version="0.0.7",
     author="Pengcheng Chen",
     author_email="pengcheng.chen@gmail.com",
     description="LeetCode CLI",
@@ -16,7 +16,7 @@ setuptools.setup(
     url="https://github.com/chenpengcheng/cli",
     packages=setuptools.find_packages(),
     classifiers=[
-        "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
@@ -24,8 +24,9 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         "ascii_graph",
-        "bs4",
-        "PyExecJS",
+        "browser-cookie3",
+        "beautifulsoup4",
+        "pyexecjs",
         "requests",
     ],
     entry_points={
