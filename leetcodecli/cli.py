@@ -18,6 +18,7 @@ import browser_cookie3
 import bs4
 import execjs
 import requests
+import webbrowser
 
 
 class Magic(object):
@@ -255,6 +256,8 @@ class OJMixin(object):
             print('Welcome to %s!' % self.domain)
         else:
             self.loggedIn = False
+            print('Please login into %s!' % self.domain)
+            webbrowser.open_new_tab(self.url)
 
     def parse_sessions(self, resp):
         sd = {}
@@ -319,8 +322,8 @@ class OJMixin(object):
         return (topics, companies)
 
     def get_problems(self):
-        ps = 'algorithms/'
-#       ps = 'favorite_lists/top-interview-questions/'
+#       ps = 'algorithms/'
+        ps = 'favorite_lists/top-interview-questions/'
         url = self.url + '/api/problems/' + ps
 
         resp = self.session.get(url)
@@ -367,7 +370,6 @@ class OJMixin(object):
             },
             'operationName': 'getQuestionDetail',
         }
-
         resp = self.session.post(url, json=data, headers=headers)
 
         q = json.loads(resp.text)['data']['question']
@@ -514,23 +516,48 @@ class OJMixin(object):
         return Result(sid, data)
 
     def get_history(self, p):
-        url = self.url + '/api/submissions/%s/' % p.slug
-
-        resp = self.session.get(url)
+        url = self.url + '/graphql/'
+        referer = self.url + '/problems/%s/submissions/' % p.slug
+        headers = {
+            'referer': referer,
+            'content-type': 'application/json',
+            'x-csrftoken': self.session.cookies['csrftoken'],
+        }
+        data = {
+            'query': """
+                query Submissions( $offset: Int!  $limit: Int!  $lastKey: String $questionSlug: String!) {
+                    submissionList( offset: $offset limit: $limit lastKey: $lastKey questionSlug: $questionSlug) {
+                        submissions {
+                            id
+                            statusDisplay
+                            lang
+                            timestamp
+                            url
+                        }
+                    }
+                }
+            """,
+            'variables': {
+                'offset': 0,
+                'limit': 10,
+                'questionSlug': p.slug
+            },
+            'operationName': 'Submissions',
+        }
+        resp = self.session.post(url, json=data, headers=headers)
 
         r = History(p.slug)
         try:
-            for e in json.loads(resp.text).get('submissions_dump'):
+            for e in json.loads(resp.text)['data']['submissionList']['submissions']:
                 sid = e.get('url').split('/')[3]
                 lang = e.get('lang')
-                s = e.get('status_display')
-                t = e.get('time')
+                s = e.get('statusDisplay')
+                t = e.get('timestamp')
                 r.add(sid=sid, lang=lang, status=s, timestamp=t)
         except TypeError:
             pass
 
         return r
-
 
 class Html(object):
     def __init__(self, p):
@@ -538,7 +565,7 @@ class Html(object):
 
     @staticmethod
     def header():
-        with open('header.html', 'r') as f:
+        with open('leetcodecli/header.html', 'r') as f:
             s = f.read()
         return s + '<body><div class="container">'
 
@@ -549,14 +576,13 @@ class Html(object):
     @property
     def title(self):
         p = self.p
-        s = '<h4>' + str(p.pid) + ' ' + p.slug.replace('-',
-                                                       ' ').title() + '</h4>'
+        s = '<h4>' + str(p.pid) + ' ' + p.slug.replace('-', ' ').title() + '</h4>'
         if p.todo:
-            s = '<div class="bg-primary text-white">' + s + '</div>'
+            s = '<div class="bg-light text-primary">' + s + '</div>'
         elif p.failed or p.rate < 0.34:
-            s = '<div class="bg-danger text-white">' + s + '</div>'
+            s = '<div class="bg-light text-danger">' + s + '</div>'
         else:
-            s = '<div>' + s + '</div>'
+            s = '<div class="bg-light text-dark">' + s + '</div>'
         return s
 
     @property
@@ -710,12 +736,8 @@ class CodeShell(cmd.Cmd, OJMixin, Magic):
             pass
 
     def limit(self, limit):
-        def order(i, j):
-            p, q = self.problems[i], self.problems[j]
-            return -int(p.freq - q.freq)
-
         def update(pd):
-            for k in pd.keys():
+            for k in list(pd):
                 pl = list(filter(lambda i: i not in ps, pd[k]))
                 if pl:
                     pd[k] = pl
@@ -724,14 +746,14 @@ class CodeShell(cmd.Cmd, OJMixin, Magic):
 
         self.xlimit = limit
         if self.xlimit:
-            ps = set(sorted(self.problems, order)[limit:])
+            ps = set(sorted(self.problems, key=lambda i: -int(self.problems[i].freq))[limit:])
             for pid in ps:
                 del self.problems[pid]
             for pd in [self.topics, self.companies]:
                 update(pd)
 
     def do_help(self, arg):
-        methods = inspect.getmembers(CodeShell, predicate=inspect.ismethod)
+        methods = inspect.getmembers(CodeShell, predicate=inspect.isfunction)
         for key, method in methods:
             if key.startswith('do_'):
                 name = key.split('_')[1]
@@ -948,7 +970,7 @@ Commands and options can be completed by <TAB>.""")
 
     @login_required
     def do_cheat(self, limit):
-        """<number>\t- C.H.E.A.T."""
+        """<number>\t- Find the best solution."""
         p = self.problems.get(self.pid)
         if p:
             sid = p.record.sid
@@ -963,10 +985,6 @@ Commands and options can be completed by <TAB>.""")
 
     def do_print(self, key):
         """[keyword]\t- Print problems by keyword in HTML."""
-        def order(p, q):
-            a = (p.rate, p.pid)
-            b = (q.rate, q.pid)
-            return 1 if a > b else -1 if a < b else 0
 
         def find(key):
             if key in self.topics:
@@ -1000,11 +1018,12 @@ Commands and options can be completed by <TAB>.""")
             f.write(Html.header())
             for t, pids in sorted(topics.items()):
                 pl = load(pids, len(printed))
-                for p in sorted(pl, order):
+                for p in sorted(pl, key=lambda p: (p.rate, p.pid)):
                     if p.pid not in printed:
                         f.write(str(Html(p)))
                         printed.add(p.pid)
             f.write(Html.tail())
+        print()
 
     def do_clear(self, unused):
         """\t\t- Clear screen."""
@@ -1028,3 +1047,6 @@ def main():
     shell = CodeShell()
     shell.do_login()
     shell.cmdloop()
+
+if __name__ == '__main__':
+    main()
