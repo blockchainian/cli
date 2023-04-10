@@ -4,7 +4,6 @@ import cmd
 import contextlib
 import difflib
 import functools
-import getpass
 import inspect
 import json
 import os
@@ -24,22 +23,22 @@ import webbrowser
 class Magic(object):
     bunnies = [
         """
-  (\(\\
+  (\\(\\
  (='.')
 o(__")")""",
 
         """
-(\__/)
+(\\__/)
 (='.'=)
 (")_(")""",
 
         """
- (\_/)
+ (\\_/)
 =(^.^)=
 (")_(")""",
 
         """
-(\__/)
+(\\__/)
 (>'.'<)
 (")_(")""",
     ]
@@ -322,7 +321,7 @@ class OJMixin(object):
         return (topics, companies)
 
     def get_problems(self):
-#       ps = 'algorithms/'
+        # ps = 'algorithms/'
         ps = 'favorite_lists/top-interview-questions/'
         url = self.url + '/api/problems/' + ps
 
@@ -558,6 +557,7 @@ class OJMixin(object):
             pass
 
         return r
+
 
 class Html(object):
     def __init__(self, p):
@@ -1047,6 +1047,7 @@ def main():
     shell = CodeShell()
     shell.do_login()
     shell.cmdloop()
+
 
 if __name__ == '__main__':
     main()
